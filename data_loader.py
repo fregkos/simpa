@@ -49,7 +49,7 @@ def get_file_lines(file_path: str) -> int:
         try:
             total_lines = int(
                 subprocess.check_output(
-                    ["wc", "-l", "datasets/arxiv-metadata-oai-snapshot.json"]
+                    ["wc", "-l", file_path]
                 )
                 .decode()
                 .strip()[0]
