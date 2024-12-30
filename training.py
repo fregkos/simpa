@@ -1,10 +1,14 @@
+import os
 from typing import Dict, List
 from preprocessing import preprocess_data
 from data_loader import save_dataset
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from pprint import pprint
 
-def preprocess_and_tag_documents(dataset: Dict[str, List], fields: List) -> List[TaggedDocument]:
+
+def preprocess_and_tag_documents(
+    dataset: Dict[str, List], fields: List
+) -> List[TaggedDocument]:
     """
     Preprocesses the dataset and tags each document with its ID.
 
@@ -13,12 +17,13 @@ def preprocess_and_tag_documents(dataset: Dict[str, List], fields: List) -> List
     :return: A list of TaggedDocument objects.
     """
     tagged_data = []
-    
+
     for paper_id in dataset.keys():
         words = preprocess_data(dataset, fields)
         tagged_data.append(TaggedDocument(words, tags=[paper_id]))
-    
+
     return tagged_data
+
 
 def train_doc2vec_model(tagged_data: List[TaggedDocument]) -> Doc2Vec:
     """
@@ -34,7 +39,10 @@ def train_doc2vec_model(tagged_data: List[TaggedDocument]) -> Doc2Vec:
 
     return model
 
-def append_vectors_to_dataset(dataset: Dict[str, List], fields: List, model: Doc2Vec) -> None:
+
+def append_vectors_to_dataset(
+    dataset: Dict[str, List], fields: List, model: Doc2Vec
+) -> None:
     """
     Appends document vectors to the dataset.
 
@@ -46,22 +54,25 @@ def append_vectors_to_dataset(dataset: Dict[str, List], fields: List, model: Doc
         words = preprocess_data(dataset, fields)
         dataset[paper_id]["vector"] = model.infer_vector(words)
 
-def train_and_save_embeddings(dataset_file_path: str, dataset: Dict[str, List], fields: List) -> None:
-    """
-    Trains a Doc2Vec model and appends the document vectors to the dataset. Then saves the embeddings to a file.
 
-    :param dataset_file_path: The path to save the dataset with embeddings.
-    :param dataset: A dictionary where keys are paper IDs and values are lists of words.
-    :param fields: The fields to preprocess.
+def create_or_load_model(
+    model_path: str, tagged_data: List[TaggedDocument]
+) -> Doc2Vec | None:
     """
-    # 1. Preprocess and tag documents
-    tagged_data = preprocess_and_tag_documents(dataset, fields) 
-    # 2. Train Doc2Vec model
-    model = train_doc2vec_model(tagged_data)
-    # 3. Append vectors to dataset
-    append_vectors_to_dataset(dataset, fields, model)
-    # 4. Save embeddings to file
-    save_dataset(dataset_file_path, dataset)
+    Loads the trained Doc2Vec model from the specified path.
+    If the model does not exist, it trains a new one using the provided tagged data.
+    :param model_path: The path to save the trained model.
+    :param tagged_data: A list of TaggedDocument objects.
+    :return: A trained Doc2Vec model.
+    """
+    model = None
 
-    # Print the document vectors (optional)
-    # pprint(dataset)
+    if os.path.exists(model_path):
+        print("Model already exists. Loading existing model...")
+        model = Doc2Vec.load(model_path)
+    else:
+        print("Training Doc2Vec model...")
+        model = train_doc2vec_model(tagged_data)
+        model.save(model_path)
+
+    return model

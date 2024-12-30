@@ -8,7 +8,12 @@ Data & Web Science - Aristotle University of Thessaloniki
 import os
 import argparse
 from data_loader import extract_fields, load_dataset, save_dataset
-from training import train_and_save_embeddings
+from training import (
+    preprocess_and_tag_documents,
+    create_or_load_model,
+    append_vectors_to_dataset,
+    save_dataset,
+)
 
 
 def main(args):
@@ -17,6 +22,7 @@ def main(args):
 
     input_file_path = args.input_file
     dataset_file_path = args.output_file
+    model_path = args.model_path
 
     dataset = {}
 
@@ -28,8 +34,17 @@ def main(args):
         dataset = extract_fields(input_file_path, fields, limit)
         save_dataset(dataset_file_path, dataset)
 
-    # The main pipeline, which includes loading the dataset, training embeddings, and saving them.
-    train_and_save_embeddings(dataset_file_path, dataset, fields)
+    # 1. Preprocess and tag documents
+    tagged_data = preprocess_and_tag_documents(dataset, fields)
+
+    # 2. Import Doc2Vec and create a new model if it doesn't exist
+    model = create_or_load_model(model_path, tagged_data)
+
+    # 3. Append vectors to dataset
+    append_vectors_to_dataset(dataset, fields, model)
+    
+    # 4. Save embeddings to file
+    save_dataset(dataset_file_path, dataset)
 
     # TODO: Get your input data and preprocess it, then get the embeddings and compare the cosine similarity between all papers in the dataset
 
@@ -63,6 +78,13 @@ if __name__ == "__main__":
         nargs="+",
         default=["title", "abstract"],
         help="fields to extract from the dataset",
+    )
+    parser.add_argument(
+        "--model_file",
+        type=str,
+        help="the model file path trained on the given dataset",
+        # required=True,
+        default="models/doc2vec.model",
     )
 
     args = parser.parse_args()
