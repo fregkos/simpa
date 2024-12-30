@@ -7,13 +7,16 @@ Data & Web Science - Aristotle University of Thessaloniki
 
 import os
 import argparse
+from pprint import pprint
 from data_loader import extract_fields, load_dataset, save_dataset
 from training import (
     preprocess_and_tag_documents,
     create_or_load_model,
     append_vectors_to_dataset,
-    save_dataset,
 )
+from preprocessing import preprocess_data
+from sklearn.metrics.pairwise import cosine_similarity
+from heapq import heappop, heappush, heapify
 
 
 def main(args):
@@ -22,7 +25,7 @@ def main(args):
 
     input_file_path = args.input_file
     dataset_file_path = args.output_file
-    model_path = args.model_path
+    model_file_path = args.model_file
 
     dataset = {}
 
@@ -38,13 +41,45 @@ def main(args):
     tagged_data = preprocess_and_tag_documents(dataset, fields)
 
     # 2. Import Doc2Vec and create a new model if it doesn't exist
-    model = create_or_load_model(model_path, tagged_data)
+    model = create_or_load_model(model_file_path, tagged_data)
 
     # 3. Append vectors to dataset
     append_vectors_to_dataset(dataset, fields, model)
-    
+
     # 4. Save embeddings to file
     save_dataset(dataset_file_path, dataset)
+
+    # 5. Find top N similar papers by asking a query from the user
+    top_n_results = 5
+    find_similar_papers(dataset, model, top_n_results)
+
+
+def find_similar_papers(dataset, model, top_n_results):
+    heap = []
+    heapify(heap)
+
+    while True:
+        query = input("Enter a query: ")
+        if query in ["/exit", "/e", "/quit", "/q"]:
+            break
+        preprocessed_query = preprocess_data(query)
+        query_vector = model.infer_vector(preprocessed_query)
+
+        for paper_id in dataset.keys():
+            heappush(
+                heap,
+                (
+                    -1 * cosine_similarity([query_vector], [dataset[paper_id]["vector"]]),
+                    paper_id,
+                ),
+            )
+
+        for _ in range(top_n_results):
+            similarity, paper_id = heappop(heap)
+            print(f"Paper ID: {paper_id}, Similarity: {-1 * similarity}")
+            pprint(dataset[paper_id]["title"])
+            pprint(dataset[paper_id]["abstract"])
+            print("\n")
 
     # TODO: Get your input data and preprocess it, then get the embeddings and compare the cosine similarity between all papers in the dataset
 

@@ -3,3 +3,4 @@ argparse
 gensim
 nltk
 orjson
+scikit-learn
