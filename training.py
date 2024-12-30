@@ -1,9 +1,12 @@
 import os
+import logging
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+
+from tqdm import tqdm
 from typing import Dict, List
-from preprocessing import preprocess_data
-from data_loader import save_dataset
+
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
-from pprint import pprint
+from preprocessing import preprocess_data
 
 
 def preprocess_and_tag_documents(
@@ -18,8 +21,10 @@ def preprocess_and_tag_documents(
     """
     tagged_data = []
 
-    for paper_id in dataset.keys():
-        words = preprocess_data(dataset, fields)
+    for paper_id in tqdm(dataset.keys(), unit="papers", desc="Preprocessing papers"):
+        # Create a concatenated doc based on all the given fields, delimited by space
+        document = " ".join([dataset[paper_id][field] for field in fields])
+        words = preprocess_data(document)
         tagged_data.append(TaggedDocument(words, tags=[paper_id]))
 
     return tagged_data
@@ -33,7 +38,7 @@ def train_doc2vec_model(tagged_data: List[TaggedDocument]) -> Doc2Vec:
     :return: The trained Doc2Vec model.
     """
     # TODO: Tune hyperparameters for Doc2Vec
-    model = Doc2Vec(vector_size=20, min_count=2, epochs=50)
+    model = Doc2Vec(vector_size=20, min_count=2, epochs=50, dm=0)
     model.build_vocab(tagged_data)
     model.train(tagged_data, total_examples=model.corpus_count, epochs=model.epochs)
 
@@ -51,7 +56,9 @@ def append_vectors_to_dataset(
     :param model: The trained Doc2Vec model.
     """
     for paper_id in dataset.keys():
-        words = preprocess_data(dataset, fields)
+        # Create a concatenated doc based on all the given fields, delimited by space
+        document = " ".join([dataset[paper_id][field] for field in fields])
+        words = preprocess_data(document)
         dataset[paper_id]["vector"] = model.infer_vector(words)
 
 
