@@ -1,0 +1,5 @@
+tqdm
+argparse
+gensim
+nltk
+orjson
