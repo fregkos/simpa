@@ -11,6 +11,8 @@ nltk.download("punkt")
 nltk.download("punkt_tab")
 nltk.download("stopwords")
 
+# Calculate stop words set once
+remove_stopwords = set(stopwords.words("english"))
 
 def preprocess_data(document: str) -> List[str]:
     """
@@ -31,7 +33,6 @@ def preprocess_data(document: str) -> List[str]:
     words = word_tokenize(document)
 
     # Remove stop words from the document
-    remove_stopwords = set(stopwords.words("english"))
     words = [word for word in words if word not in remove_stopwords]
 
     return words

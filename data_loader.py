@@ -4,6 +4,8 @@ import subprocess
 from typing import Iterator
 from tqdm import tqdm
 from pprint import pprint
+from preprocessing import clean_abstract
+
 
 def parse_json(json_string: str) -> dict:
     """
@@ -38,7 +40,7 @@ def get_file_lines(file_path: str) -> int:
     if os.name == "nt":
         try:
             total_lines = (
-                subprocess.check_output(["find", "/c", "/l", '"data.json"', file_path])
+                subprocess.check_output(["find", "/c", "/l", file_path])
                 .decode()
                 .strip()
             )
@@ -47,11 +49,7 @@ def get_file_lines(file_path: str) -> int:
     elif os.name == "posix":
         try:
             total_lines = int(
-                subprocess.check_output(
-                    ["wc", "-l", file_path]
-                )
-                .decode()
-                .strip()[0]
+                subprocess.check_output(["wc", "-l", file_path]).decode().strip().split(' ')[0]
             )
         except subprocess.CalledProcessError as e:
             print(f"Failed to count lines in {file_path}: {e}")
@@ -73,11 +71,7 @@ def fetch_data_from_json_file(file_path: str, limit: int = None) -> Iterator[dic
     i = 0
     try:
         with open(file_path, "r") as file:
-            total_lines = get_file_lines(file_path) if limit is None else limit
-
-            for line in tqdm(
-                file, desc="Loading papers", unit="papers", total=total_lines
-            ):
+            for line in file:
                 if limit and i >= limit:
                     break
                 try:
@@ -87,40 +81,48 @@ def fetch_data_from_json_file(file_path: str, limit: int = None) -> Iterator[dic
                     print(f"Failed to decode JSON in iteration {i}: {e}")
 
         size = os.path.getsize(file_path) * 1e-9
-        print(f"Loading file done, ~{size:.2f} GB")
+        print(f"Extraction done, extracted {i} papers, total file size ~{size:.2f} GB")
     except FileNotFoundError as e:
         print(f"File not found: {e}")
         return None
 
 
 def extract_fields(
-    file_path: str = "data.json",
+    file_path: str,
     fields: list = ["title", "abstract"],
-    limit: int = 0,
-    clean_abstract: bool = False,
+    limit: int = None,
+    should_clean_abstract: bool = False,
 ) -> dict:
     """
-    Extracts specified fields from a JSON file and returns them in a dictionary.
+    Extract fields from a JSON file. The function reads each line of the file,
+    parses it as JSON, and extracts specified fields. It supports cleaning the abstract.
 
     Args:
         file_path (str, optional): Path to the JSON file. Defaults to "data.json".
         fields (list, optional): List of field names to extract. Defaults to ["title", "abstract"].
         limit (int, optional): Maximum number of lines to process. Defaults to None.
+        clean_abstract (bool, optional): Whether to clean the abstract before extraction. Defaults to False.
 
     Returns:
         dict: A dictionary where keys are paper IDs and values are dictionaries containing the extracted fields.
     """
     dataset = {}
+    total_lines = get_file_lines(file_path) if not limit else limit
+    
+    progress_bar = tqdm(total=total_lines, desc="Loading & Cleaning papers", unit="papers")
+
     for data in fetch_data_from_json_file(file_path, limit):
         if data is None:
             print("Failed to parse this data. Skipping it.")
             pprint(data)
             continue
 
-        if 'abstract' in fields and clean_abstract:
-            data['abstract'] = clean_abstract(data['abstract'])
+        if "abstract" in fields and should_clean_abstract:
+            data["abstract"] = clean_abstract(data["abstract"])
 
         dataset[data["id"]] = {key: data[key] for key in fields if key in data}
+        progress_bar.update(1)
+    progress_bar.close()
 
     if limit and limit <= 10:
         pprint(dataset)
