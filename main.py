@@ -8,13 +8,15 @@ Data & Web Science - Aristotle University of Thessaloniki
 import os
 import argparse
 from pprint import pprint
+
 from data_loader import extract_fields, load_dataset, save_dataset
 from training import (
     preprocess_and_tag_documents,
     create_or_load_model,
     append_vectors_to_dataset,
 )
-from preprocessing import preprocess_data
+from preprocessing import preprocess_data, create_necessary_folders
+from sklearn import preprocessing
 from sklearn.metrics.pairwise import cosine_similarity
 from heapq import heappop, heappush, heapify
 
@@ -28,6 +30,9 @@ def main(args):
     model_file_path = args.model_file
 
     dataset = {}
+
+    # Firstly, create necessary directories if need e
+    create_necessary_folders()
 
     # Check if the pruned file exists before loading it
     if os.path.exists(dataset_file_path):

@@ -3,9 +3,10 @@ from typing import Any, Dict, List
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-
+import os
 # Download necessary NLTK resources
 nltk.download("punkt")
+nltk.download("punkt_tab")
 nltk.download("stopwords")
 
 
@@ -32,3 +33,9 @@ def preprocess_data(document: str) -> List[str]:
     words = [word for word in words if word not in remove_stopwords]
 
     return words
+
+def create_necessary_folders(parent='.'):
+    models_path = os.path.join(parent, 'models')
+    datasets_path = os.path.join(parent, 'datasets')
+    os.makedirs(models_path, exist_ok=True)
+    os.makedirs(datasets_path, exist_ok=True)

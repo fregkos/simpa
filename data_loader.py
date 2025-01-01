@@ -4,7 +4,7 @@ import subprocess
 from typing import Iterator
 from tqdm import tqdm
 from pprint import pprint
-
+import re
 
 def parse_json(json_string: str) -> dict:
     """
@@ -116,6 +116,16 @@ def extract_fields(
             print("Failed to parse this data. Skipping it.")
             pprint(data)
             continue
+
+        if 'abstract' in fields:
+            # This regex replaces:
+            # 1. Newlines, carriage returns, and tabs [\n\r\t]
+            # 2. LaTeX math expressions between dollar signs \$.*?\$
+            # 3. LaTeX commands like \command{arg} \\[a-zA-Z]+(?:\{.*?\})*
+            # With a single space
+            abstract = re.sub(r'[\n\r\t]|\\\(.*?\\\)|\\\[.*?\\\]|\$.*?\$|\\[a-zA-Z]+(?:\{.*?\})*', ' ', data['abstract']).strip()
+            print(abstract, '\nvs\n', data['abstract'])
+            data['abstract'] = abstract # replace it with clean version
 
         dataset[data["id"]] = {key: data[key] for key in fields if key in data}
 
