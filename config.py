@@ -48,6 +48,20 @@ def parse_arguments():
         default=False,
     )
     parser.add_argument(
+        "-sd",
+        "--scratch_dataset",
+        action=argparse.BooleanOptionalAction,
+        help="(re)build the dataset from scratch, even if it exists",
+        default=False,
+    )
+    parser.add_argument(
+        "-sm",
+        "--scratch_model",
+        action=argparse.BooleanOptionalAction,
+        help="(re)create the Doc2Vec model from scratch, even if it exists",
+        default=False,
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action=argparse.BooleanOptionalAction,

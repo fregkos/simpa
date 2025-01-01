@@ -152,7 +152,7 @@ def load_dataset(dataset_file_path: str) -> dict:
         return None
 
 
-def save_dataset(dataset_file_path: str, dataset: dict):
+def save_dataset(dataset_file_path: str, dataset: dict, rebuild_if_exists=False):
     """
     Saves a dataset to a JSON file.
 

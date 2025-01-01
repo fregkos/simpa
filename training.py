@@ -63,7 +63,7 @@ def append_vectors_to_dataset(
 
 
 def create_or_load_model(
-    model_path: str, tagged_data: List[TaggedDocument]
+    model_path: str, tagged_data: List[TaggedDocument], scratch_model: bool = False
 ) -> Doc2Vec | None:
     """
     Loads the trained Doc2Vec model from the specified path.
@@ -74,7 +74,7 @@ def create_or_load_model(
     """
     model = None
 
-    if os.path.exists(model_path):
+    if os.path.exists(model_path) and not scratch_model:
         print("Model already exists. Loading existing model...")
         model = Doc2Vec.load(model_path)
     else:
