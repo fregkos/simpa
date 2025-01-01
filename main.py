@@ -29,13 +29,16 @@ def main(args):
     dataset_file_path = args.output_file
     model_file_path = args.model_file
 
+    scratch_dataset = args.scratch_dataset
+    scratch_doc2vec_model = args.scratch_model
     dataset = {}
 
     # Firstly, create necessary directories if need e
     create_necessary_folders()
 
     # Check if the pruned file exists before loading it
-    if os.path.exists(dataset_file_path):
+    # And make sure the user has not asked for rebuilding the dataset from scratch
+    if os.path.exists(dataset_file_path) and not scratch_dataset:
         dataset = load_dataset(dataset_file_path)
     else:
         # otherwise, load the full dataset and prune it
@@ -46,13 +49,13 @@ def main(args):
     tagged_data = preprocess_and_tag_documents(dataset, fields)
 
     # 2. Import Doc2Vec and create a new model if it doesn't exist
-    model = create_or_load_model(model_file_path, tagged_data)
+    model = create_or_load_model(model_file_path, tagged_data, scratch_doc2vec_model)
 
     # 3. Append vectors to dataset
     append_vectors_to_dataset(dataset, fields, model)
 
     # 4. Save embeddings to file
-    save_dataset(dataset_file_path, dataset)
+    save_dataset(dataset_file_path, dataset, scratch_dataset)
 
     # 5. Find top N similar papers by asking a query from the user
     top_n_results = 5
@@ -125,6 +128,18 @@ if __name__ == "__main__":
         help="the model file path trained on the given dataset",
         # required=True,
         default="models/doc2vec.model",
+    )
+    parser.add_argument(
+        '--scratch_dataset',
+        action=argparse.BooleanOptionalAction,
+        help='(re)build the dataset from scratch, even if it exists',
+        default=False,
+    )
+    parser.add_argument(
+        '--scratch_model',
+        action=argparse.BooleanOptionalAction,
+        help='(re)create the Doc2Vec model from scratch, even if it exists',
+        default=False,
     )
 
     args = parser.parse_args()
