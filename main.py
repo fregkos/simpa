@@ -6,19 +6,19 @@ Data & Web Science - Aristotle University of Thessaloniki
 """
 
 import os
-import argparse
+from heapq import heapify, heappop, heappush
 from pprint import pprint
 
-from data_loader import extract_fields, load_dataset, save_dataset
-from training import (
-    preprocess_and_tag_documents,
-    create_or_load_model,
-    append_vectors_to_dataset,
-)
-from preprocessing import preprocess_data, create_necessary_folders
-from sklearn import preprocessing
 from sklearn.metrics.pairwise import cosine_similarity
-from heapq import heappop, heappush, heapify
+
+from config import parse_arguments
+from data_loader import extract_fields, load_dataset, save_dataset
+from preprocessing import create_necessary_folders, preprocess_data
+from training import (
+    append_vectors_to_dataset,
+    create_or_load_model,
+    preprocess_and_tag_documents,
+)
 
 
 def main(args):
@@ -29,7 +29,7 @@ def main(args):
     dataset_file_path = args.output_file
     model_file_path = args.model_file
     clean_abstract = args.clean_abstract
-    print(f'{clean_abstract=}')
+
     dataset = {}
 
     # Firstly, create necessary directories if need e
@@ -75,7 +75,8 @@ def find_similar_papers(dataset, model, top_n_results):
             heappush(
                 heap,
                 (
-                    -1 * cosine_similarity([query_vector], [dataset[paper_id]["vector"]]),
+                    -1
+                    * cosine_similarity([query_vector], [dataset[paper_id]["vector"]]),
                     paper_id,
                 ),
             )
@@ -91,48 +92,5 @@ def find_similar_papers(dataset, model, top_n_results):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--input_file",
-        type=str,
-        help="the input file path of the dataset",
-        # required=True,
-        default="datasets/arxiv-metadata-oai-snapshot.json",
-    )
-    parser.add_argument(
-        "--output_file",
-        type=str,
-        help="the output file path of the dataset, with the embeddings saved",
-        # required=True,
-        default="datasets/dataset.json",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        # default=10,
-        help="number of sequential lines to parse from the input file",
-    )
-    parser.add_argument(
-        "--fields",
-        type=list,
-        nargs="+",
-        default=["title", "abstract"],
-        help="fields to extract from the dataset",
-    )
-    parser.add_argument(
-        "--model_file",
-        type=str,
-        help="the model file path trained on the given dataset",
-        # required=True,
-        default="models/doc2vec.model",
-    )
-    parser.add_argument(
-        '-c',
-        '--clean_abstract',
-        action=argparse.BooleanOptionalAction,
-        help='clean abstract while preprocessing (\'abstract\' must be in the FIELDS)',
-        default=False,
-    )
-    args = parser.parse_args()
+    args = parse_arguments()
     main(args)

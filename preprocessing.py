@@ -1,9 +1,11 @@
-from typing import Any, Dict, List
-
+import os
 import nltk
+import re
+from typing import List
+from config import VERBOSE
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-import os
+
 # Download necessary NLTK resources
 nltk.download("punkt")
 nltk.download("punkt_tab")
@@ -34,8 +36,26 @@ def preprocess_data(document: str) -> List[str]:
 
     return words
 
-def create_necessary_folders(parent='.'):
-    models_path = os.path.join(parent, 'models')
-    datasets_path = os.path.join(parent, 'datasets')
+
+def create_necessary_folders(parent="."):
+    models_path = os.path.join(parent, "models")
+    datasets_path = os.path.join(parent, "datasets")
     os.makedirs(models_path, exist_ok=True)
     os.makedirs(datasets_path, exist_ok=True)
+
+
+def clean_abstract(text: str) -> str:
+    """
+    This regex replaces:
+    1. Newlines, carriage returns, and tabs [\n\r\t]
+    2. LaTeX math expressions between dollar signs \$.*?\$
+    3. LaTeX commands like \command{arg} \\[a-zA-Z]+(?:\{.*?\})*
+    With a single space
+    """
+    pattern = r"[\n\r\t]|\\\(.*?\\\)|\\\[.*?\\\]|\$.*?\$|\\[a-zA-Z]+(?:\{.*?\})*"
+    abstract = re.sub(pattern, " ", text).strip()
+
+    if VERBOSE:
+        print(text, "\nvs\n", abstract)
+
+    return abstract
