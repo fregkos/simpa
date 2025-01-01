@@ -97,7 +97,8 @@ def fetch_data_from_json_file(file_path: str, limit: int = None) -> Iterator[dic
 def extract_fields(
     file_path: str = "data.json",
     fields: list = ["title", "abstract"],
-    limit: int = None,
+    limit: int = 0,
+    clean_abstract: bool = False,
 ) -> dict:
     """
     Extracts specified fields from a JSON file and returns them in a dictionary.
@@ -117,7 +118,7 @@ def extract_fields(
             pprint(data)
             continue
 
-        if 'abstract' in fields:
+        if 'abstract' in fields and clean_abstract:
             # This regex replaces:
             # 1. Newlines, carriage returns, and tabs [\n\r\t]
             # 2. LaTeX math expressions between dollar signs \$.*?\$

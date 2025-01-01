@@ -28,7 +28,8 @@ def main(args):
     input_file_path = args.input_file
     dataset_file_path = args.output_file
     model_file_path = args.model_file
-
+    clean_abstract = args.clean_abstract
+    print(f'{clean_abstract=}')
     dataset = {}
 
     # Firstly, create necessary directories if need e
@@ -39,7 +40,7 @@ def main(args):
         dataset = load_dataset(dataset_file_path)
     else:
         # otherwise, load the full dataset and prune it
-        dataset = extract_fields(input_file_path, fields, limit)
+        dataset = extract_fields(input_file_path, fields, limit, clean_abstract)
         save_dataset(dataset_file_path, dataset)
 
     # 1. Preprocess and tag documents
@@ -126,6 +127,12 @@ if __name__ == "__main__":
         # required=True,
         default="models/doc2vec.model",
     )
-
+    parser.add_argument(
+        '-c',
+        '--clean_abstract',
+        action=argparse.BooleanOptionalAction,
+        help='clean abstract while preprocessing (\'abstract\' must be in the FIELDS)',
+        default=False,
+    )
     args = parser.parse_args()
     main(args)
