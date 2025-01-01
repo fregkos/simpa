@@ -56,7 +56,7 @@ def main(args):
     append_vectors_to_dataset(dataset, fields, model)
 
     # 4. Save embeddings to file
-    save_dataset(dataset_file_path, dataset, scratch_dataset)
+    save_dataset(dataset_file_path, dataset)
 
     # 5. Find top N similar papers by asking a query from the user
     top_n_results = 5
