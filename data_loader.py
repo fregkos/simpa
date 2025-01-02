@@ -5,7 +5,7 @@ from typing import Iterator
 from tqdm import tqdm
 from pprint import pprint
 from preprocessing import clean_abstract
-
+import defaults
 
 def parse_json(json_string: str) -> dict:
     """
@@ -117,9 +117,9 @@ def extract_fields(
             pprint(data)
             continue
 
+        data['title'] = clean_abstract(data['title']) # clean title as well, as some titles have '\n' characters
         if "abstract" in fields and should_clean_abstract:
             data["abstract"] = clean_abstract(data["abstract"])
-
         dataset[data["id"]] = {key: data[key] for key in fields if key in data}
         progress_bar.update(1)
     progress_bar.close()
@@ -154,7 +154,7 @@ def load_dataset(dataset_file_path: str) -> dict:
         return None
 
 
-def save_dataset(dataset_file_path: str, dataset: dict):
+def save_dataset(dataset_file_path: str, dataset: dict, fields: list, linesentences_file_path: str):
     """
     Saves a dataset to a JSON file.
 
@@ -166,6 +166,21 @@ def save_dataset(dataset_file_path: str, dataset: dict):
 
     with open(dataset_file_path, "wb") as f:
         f.write(orjson.dumps(dataset, option=orjson.OPT_SERIALIZE_NUMPY))
-
     size = os.path.getsize(dataset_file_path) * 1e-9
-    print(f"Done. Saved to {dataset_file_path}, ~{size:.2f} GB")
+    print(f"Saved to {dataset_file_path}, ~{size:.2f} GB")
+    
+    print(f'Creating LineSentences ...')
+    progress_bar = tqdm(
+        total=len(dataset), desc="LineSentence creation", unit="papers"
+    )
+    with open(linesentences_file_path, 'w') as f:
+        for paper_id in dataset.keys():
+            # Create a concatenated doc based on all the given fields, delimited by space
+            document = " ".join([dataset[paper_id][field] for field in fields])
+            document += '\n'
+            f.write(document)
+            progress_bar.update(1)
+    progress_bar.close()
+
+    size = os.path.getsize(linesentences_file_path) * 1e-9
+    print(f"Saved LineSentences to {linesentences_file_path}, ~{size:.2f} GB")
