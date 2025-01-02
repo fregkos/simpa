@@ -31,59 +31,6 @@ def split_dataset(dataset, n):
     ]
 
 
-def process_paper(
-    paper_id: str, dataset: Dict[str, List], fields: List, progress_bar: tqdm = None
-) -> TaggedDocument:
-    # Create a concatenated doc based on all the given fields, delimited by space
-    document = " ".join([dataset[paper_id][field] for field in fields])
-    words = preprocess_data(document)
-    progress_bar.update(1) if progress_bar else None
-    doc = TaggedDocument(words, tags=[paper_id])
-
-    return doc
-
-
-def preprocess_and_tag_documents_parallel(
-    dataset: Dict[str, List], fields: List, num_chunks: int
-) -> List[TaggedDocument]:
-    """
-    Preprocesses the dataset and tags each document with its ID.
-
-    :param dataset: A dictionary where keys are paper IDs and values are lists of words.
-    :param fields: The fields to preprocess.
-    :return: A list of TaggedDocument objects.
-    """
-    # Split the dataset into chunks
-    chunks = split_dataset(dataset, num_chunks)
-
-    tagged_data = []
-
-    futures = []
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for chunk in chunks:
-            # Create a list of tqdm instances
-            submission_bar = tqdm(total=len(chunk), desc="Submitting jobs", unit="jobs")
-            processing_bar = tqdm(
-                total=len(chunk), desc="Preprocessing papers", unit="papers"
-            )
-            for paper_id in chunk.keys():
-                futures.append(
-                    executor.submit(
-                        process_paper, paper_id, chunk, fields, processing_bar
-                    )
-                )
-                submission_bar.update(1)
-            submission_bar.close()
-
-    # Collect results as they become available and update progress bars
-    for future in concurrent.futures.as_completed(futures):
-        tagged_data.extend(future.result())
-    processing_bar.close()
-
-    return tagged_data
-
-
 def preprocess_and_tag_documents(
     dataset: Dict[str, List], fields: List
 ) -> List[TaggedDocument]:
@@ -116,48 +63,13 @@ def train_doc2vec_model(tagged_data: List[TaggedDocument]) -> Doc2Vec:
     :param tagged_data: A list of TaggedDocument objects.
     :return: The trained Doc2Vec model.
     """
-    # TODO: Tune hyperparameters for Doc2Vec
+    # TODO: Tune hyperparameters for Doc2Vec (workers = n-1 etc)
     model = Doc2Vec(vector_size=20, min_count=2, epochs=50, dm=0)
     model.build_vocab(tagged_data)
     model.train(tagged_data, total_examples=model.corpus_count, epochs=model.epochs)
 
     return model
 
-
-def append_vectors_to_dataset_job(dataset, paper_id, fields, model, progress_bar):
-    # Create a concatenated doc based on all the given fields, delimited by space
-    document = " ".join([dataset[paper_id][field] for field in fields])
-    words = preprocess_data(document)
-    dataset[paper_id]["vector"] = model.infer_vector(words)
-    progress_bar.update(1)
-
-
-def append_vectors_to_dataset_parallel(
-    dataset: Dict[str, List], fields: List, model: Doc2Vec
-) -> None:
-    """
-    Appends document vectors to the dataset.
-
-    :param dataset: A dictionary where keys are paper IDs and values are lists of words.
-    :param fields: The fields to preprocess.
-    :param model: The trained Doc2Vec model.
-    """
-    progress_bar = tqdm(
-        total=len(dataset), desc="Appending vectors to dataset", unit="papers"
-    )
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for paper_id in dataset.keys():
-            executor.submit(
-                append_vectors_to_dataset_job,
-                dataset,
-                paper_id,
-                fields,
-                model,
-                progress_bar,
-            )
-
-    progress_bar.close()
 
 def append_vectors_to_dataset(
     dataset: Dict[str, List], fields: List, model: Doc2Vec
@@ -180,6 +92,7 @@ def append_vectors_to_dataset(
         dataset[paper_id]["vector"] = model.infer_vector(words)
         progress_bar.update(1)
     progress_bar.close()
+
 
 def train_or_load_model(
     model_path: str, dataset: Dict[str, List], fields: List, new_model: bool = False
