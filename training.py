@@ -38,7 +38,7 @@ def train_doc2vec_model(tagged_data: List[TaggedDocument]) -> Doc2Vec:
     :return: The trained Doc2Vec model.
     """
     # TODO: Tune hyperparameters for Doc2Vec
-    model = Doc2Vec(vector_size=20, min_count=2, epochs=50, dm=0)
+    model = Doc2Vec(vector_size=20, min_count=2, epochs=50, dm=0, workers=4)
     model.build_vocab(tagged_data)
     model.train(tagged_data, total_examples=model.corpus_count, epochs=model.epochs)
 
