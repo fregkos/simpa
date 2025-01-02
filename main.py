@@ -6,20 +6,12 @@ Data & Web Science - Aristotle University of Thessaloniki
 """
 
 import os
-from heapq import heapify, heappop, heappush
 from pprint import pprint
-
-from sklearn.metrics.pairwise import cosine_similarity
-from tqdm import tqdm
 
 from config import parse_arguments
 from data_loader import extract_fields, load_dataset, save_dataset
 from preprocessing import create_necessary_folders, preprocess_data
-from training import (
-    append_vectors_to_dataset,
-    append_vectors_to_dataset_parallel,
-    train_or_load_model,
-)
+from training import train_or_load_model
 
 
 def main(args):
@@ -50,21 +42,12 @@ def main(args):
     # 1. Import Doc2Vec and create a new model if it doesn't exist
     model = train_or_load_model(model_file_path, dataset, fields, new_doc2vec_model)
 
-    # 2. Append vectors to dataset
-    if os.path.exists(dataset_file_path) and new_dataset:
-        append_vectors_to_dataset_parallel(dataset, fields, model)
-
-    # 3. Save embeddings to file
-    save_dataset(dataset_file_path, dataset)
-
-    # 4. Find top N similar papers by asking a query from the user
+    # 2. Find top N similar papers by asking a query from the user
     top_n_results = 5
     find_similar_papers(dataset, model, top_n_results)
 
 
 def find_similar_papers(dataset, model, top_n_results):
-    heap = []
-    heapify(heap)
 
     while True:
         query = input("Enter a query: ")
@@ -73,25 +56,9 @@ def find_similar_papers(dataset, model, top_n_results):
         preprocessed_query = preprocess_data(query)
         query_vector = model.infer_vector(preprocessed_query)
 
-        progress_bar = tqdm(
-            total=len(dataset), desc="Computing similarities", unit="papers"
-        )
-
-        for paper_id in dataset.keys():
-            heappush(
-                heap,
-                (
-                    -1
-                    * cosine_similarity([query_vector], [dataset[paper_id]["vector"]]),
-                    paper_id,
-                ),
-            )
-            progress_bar.update(1)
-        progress_bar.close()
-
-        for _ in range(top_n_results):
-            similarity, paper_id = heappop(heap)
-            print(f"Paper ID: {paper_id}, Similarity: {-1 * similarity}")
+        similar_docs = model.dv.most_similar([query_vector], topn=top_n_results)
+        for paper_id, similarity in similar_docs:
+            print(f"Paper ID: {paper_id}, Similarity: {similarity}")
             pprint(dataset[paper_id]["title"])
             pprint(dataset[paper_id]["abstract"])
             print("\n")
