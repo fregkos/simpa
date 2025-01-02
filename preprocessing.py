@@ -6,6 +6,8 @@ from config import VERBOSE
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
+import defaults
+
 # Download necessary NLTK resources
 nltk.download("punkt")
 nltk.download("punkt_tab")
@@ -39,8 +41,8 @@ def preprocess_data(document: str) -> List[str]:
 
 
 def create_necessary_folders(parent="."):
-    models_path = os.path.join(parent, "models")
-    datasets_path = os.path.join(parent, "datasets")
+    models_path = os.path.join(parent, defaults.MODELS_PATH)
+    datasets_path = os.path.join(parent, defaults.DATASETS_PATH)
     os.makedirs(models_path, exist_ok=True)
     os.makedirs(datasets_path, exist_ok=True)
 
