@@ -13,6 +13,7 @@ from data_loader import extract_fields, load_dataset, save_dataset
 from preprocessing import create_necessary_folders, preprocess_data
 from training import train_or_load_model
 import defaults
+from keybert import KeyBERT
 
 
 def main(args):
@@ -50,12 +51,15 @@ def main(args):
         linesentences_file_path, model_file_path, new_doc2vec_model
     )
 
+    # 2. create KeyBERT model for keyword extraction
+    keybert_model = KeyBERT()
+
     # 2. Find top N similar papers by asking a query from the user
     top_n_results = 5
-    find_similar_papers(dataset, model, top_n_results)
+    find_similar_papers(dataset, model, top_n_results, keybert_model)
 
 
-def find_similar_papers(dataset, model, top_n_results):
+def find_similar_papers(dataset, model, top_n_results, keybert_model):
 
     while True:
         query = input("Enter a query: ")
@@ -72,6 +76,12 @@ def find_similar_papers(dataset, model, top_n_results):
             pprint(dataset[paper_id]["title"])
             pprint(dataset[paper_id]["abstract"])
             print("\n")
+        query_keywords = keybert_model.extract_keywords(query, keyphrase_ngram_range=(1, 3),)
+        print('Extracted keywords, based on your query:')
+        for keyword, similarity_to_query in query_keywords:
+            print(keyword, end=' ') # delimited by spaces instead of new lines for easy copy-pasting
+        print() # print empty new line
+        
 
 
 if __name__ == "__main__":
