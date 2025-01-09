@@ -16,6 +16,7 @@ nltk.download("stopwords")
 # Calculate stop words set once
 remove_stopwords = set(stopwords.words("english"))
 
+
 def preprocess_data(document: str) -> List[str]:
     """
     Preprocesses the dataset by concatenating specified fields into a single document,
@@ -56,10 +57,10 @@ def clean_text(text: str) -> str:
     With a single space
     """
     # pattern = r"[\n\r\t]|\\\(.*?\\\)|\\\[.*?\\\]|\$.*?\$|\\[a-zA-Z]+(?:\{.*?\})*"
-    pattern = r'\s+'
+    pattern = r"\s+"
     cleaned_text = re.sub(pattern, " ", text).strip()
 
     if VERBOSE:
-        print(text, "\n was cleaned and now is: \n", cleaned_text)
+        print(f"{text}\nwas cleaned and now is:\n{cleaned_text}")
 
     return cleaned_text

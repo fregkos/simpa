@@ -68,10 +68,9 @@ def train_doc2vec_model(sentences: LineSentence) -> Doc2Vec:
     :return: The trained Doc2Vec model.
     """
     # TODO: Tune hyperparameters for Doc2Vec (workers = n-1 etc)
-    model = Doc2Vec(corpus_file=sentences, vector_size=20, min_count=10, epochs=50, dm=0)
-    # model vocabulary building and training is done automatically
-    # model.build_vocab(tagged_data)
-    # model.train(tagged_data, total_examples=model.corpus_count, epochs=model.epochs)
+    model = Doc2Vec(
+        corpus_file=sentences, vector_size=20, min_count=10, epochs=50, dm=0
+    )
 
     return model
 
@@ -115,13 +114,8 @@ def train_or_load_model(
         print("Model already exists. Loading existing model...")
         model = Doc2Vec.load(model_path)
     else:
-        # 0. Preprocess and tag documents
-        # tagged_data = preprocess_and_tag_documents(dataset, fields)
-        # sentences = preprocess_documents_as_line_sentences(defaults.LINESENTENCES_PATH, fields)
-        # sentences = LineSentence(defaults.LINESENTENCES_PATH)
-        sentences = linesentences_file_path
         print("Training Doc2Vec model...")
-        model = train_doc2vec_model(sentences)
+        model = train_doc2vec_model(linesentences_file_path)
         model.save(model_path)
 
     return model

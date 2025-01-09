@@ -7,6 +7,7 @@ from pprint import pprint
 from preprocessing import clean_text
 import defaults
 
+
 def parse_json(json_string: str) -> dict:
     """
     Parses a JSON string into a dictionary.
@@ -49,7 +50,10 @@ def get_file_lines(file_path: str) -> int:
     elif os.name == "posix":
         try:
             total_lines = int(
-                subprocess.check_output(["wc", "-l", file_path]).decode().strip().split(' ')[0]
+                subprocess.check_output(["wc", "-l", file_path])
+                .decode()
+                .strip()
+                .split(" ")[0]
             )
         except subprocess.CalledProcessError as e:
             print(f"Failed to count lines in {file_path}: {e}")
@@ -108,8 +112,10 @@ def extract_fields(
     """
     dataset = {}
     total_lines = get_file_lines(file_path) if not limit else limit
-    
-    progress_bar = tqdm(total=total_lines, desc="Loading & Cleaning papers", unit="papers")
+
+    progress_bar = tqdm(
+        total=total_lines, desc="Loading & Cleaning papers", unit="papers"
+    )
 
     for data in fetch_data_from_json_file(file_path, limit):
         if data is None:
@@ -117,9 +123,11 @@ def extract_fields(
             pprint(data)
             continue
 
-        data['title'] = clean_text(data['title']) # clean title as well, as some titles have '\n' characters
+        # clean title as well, as some titles have '\n' characters
+        data["title"] = clean_text(data["title"])
         if "abstract" in fields and should_clean_text:
             data["abstract"] = clean_text(data["abstract"])
+
         dataset[data["id"]] = {key: data[key] for key in fields if key in data}
         progress_bar.update(1)
     progress_bar.close()
@@ -154,7 +162,9 @@ def load_dataset(dataset_file_path: str) -> dict:
         return None
 
 
-def save_dataset(dataset_file_path: str, dataset: dict, fields: list, linesentences_file_path: str):
+def save_dataset(
+    dataset_file_path: str, dataset: dict, fields: list, linesentences_file_path: str
+):
     """
     Saves a dataset to a JSON file.
 
@@ -168,16 +178,14 @@ def save_dataset(dataset_file_path: str, dataset: dict, fields: list, linesenten
         f.write(orjson.dumps(dataset, option=orjson.OPT_SERIALIZE_NUMPY))
     size = os.path.getsize(dataset_file_path) * 1e-9
     print(f"Saved to {dataset_file_path}, ~{size:.2f} GB")
-    
-    print(f'Creating LineSentences ...')
-    progress_bar = tqdm(
-        total=len(dataset), desc="LineSentence creation", unit="papers"
-    )
-    with open(linesentences_file_path, 'w') as f:
+
+    print(f"Creating LineSentences ...")
+    progress_bar = tqdm(total=len(dataset), desc="LineSentence creation", unit="papers")
+    with open(linesentences_file_path, "w") as f:
         for paper_id in dataset.keys():
             # Create a concatenated doc based on all the given fields, delimited by space
             document = " ".join([dataset[paper_id][field] for field in fields])
-            document += '\n'
+            document += "\n"
             f.write(document)
             progress_bar.update(1)
     progress_bar.close()

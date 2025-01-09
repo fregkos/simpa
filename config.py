@@ -45,7 +45,7 @@ def parse_arguments():
         "--clean_text",
         action=argparse.BooleanOptionalAction,
         help="clean abstract while preprocessing ('abstract' must be in the FIELDS)",
-        default=False,
+        default=True,
     )
     parser.add_argument(
         "-nd",
