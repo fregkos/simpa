@@ -42,7 +42,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "-c",
-        "--clean_abstract",
+        "--clean_text",
         action=argparse.BooleanOptionalAction,
         help="clean abstract while preprocessing ('abstract' must be in the FIELDS)",
         default=False,

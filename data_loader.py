@@ -4,7 +4,7 @@ import subprocess
 from typing import Iterator
 from tqdm import tqdm
 from pprint import pprint
-from preprocessing import clean_abstract
+from preprocessing import clean_text
 
 
 def parse_json(json_string: str) -> dict:
@@ -91,7 +91,7 @@ def extract_fields(
     file_path: str,
     fields: list = ["title", "abstract"],
     limit: int = None,
-    should_clean_abstract: bool = False,
+    should_clean_text: bool = False,
 ) -> dict:
     """
     Extract fields from a JSON file. The function reads each line of the file,
@@ -101,7 +101,7 @@ def extract_fields(
         file_path (str, optional): Path to the JSON file. Defaults to "data.json".
         fields (list, optional): List of field names to extract. Defaults to ["title", "abstract"].
         limit (int, optional): Maximum number of lines to process. Defaults to None.
-        clean_abstract (bool, optional): Whether to clean the abstract before extraction. Defaults to False.
+        clean_text (bool, optional): Whether to clean the abstract before extraction. Defaults to False.
 
     Returns:
         dict: A dictionary where keys are paper IDs and values are dictionaries containing the extracted fields.
@@ -117,8 +117,8 @@ def extract_fields(
             pprint(data)
             continue
 
-        if "abstract" in fields and should_clean_abstract:
-            data["abstract"] = clean_abstract(data["abstract"])
+        if "abstract" in fields and should_clean_text:
+            data["abstract"] = clean_text(data["abstract"])
 
         dataset[data["id"]] = {key: data[key] for key in fields if key in data}
         progress_bar.update(1)

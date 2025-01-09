@@ -21,7 +21,7 @@ def main(args):
     input_file_path = args.input_file
     dataset_file_path = args.output_file
     model_file_path = args.model_file
-    clean_abstract = args.clean_abstract
+    clean_text = args.clean_text
 
     new_dataset = args.new_dataset
     new_doc2vec_model = args.new_model
@@ -36,7 +36,7 @@ def main(args):
         dataset = load_dataset(dataset_file_path)
     else:
         # otherwise, load the full dataset and prune it
-        dataset = extract_fields(input_file_path, fields, limit, clean_abstract)
+        dataset = extract_fields(input_file_path, fields, limit, clean_text)
         save_dataset(dataset_file_path, dataset)
 
     # 1. Import Doc2Vec and create a new model if it doesn't exist

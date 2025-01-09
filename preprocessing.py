@@ -45,7 +45,7 @@ def create_necessary_folders(parent="."):
     os.makedirs(datasets_path, exist_ok=True)
 
 
-def clean_abstract(text: str) -> str:
+def clean_text(text: str) -> str:
     """
     This regex replaces:
     1. Newlines, carriage returns, and tabs [\n\r\t]
@@ -53,10 +53,11 @@ def clean_abstract(text: str) -> str:
     3. LaTeX commands like \command{arg} \\[a-zA-Z]+(?:\{.*?\})*
     With a single space
     """
-    pattern = r"[\n\r\t]|\\\(.*?\\\)|\\\[.*?\\\]|\$.*?\$|\\[a-zA-Z]+(?:\{.*?\})*"
-    abstract = re.sub(pattern, " ", text).strip()
+    # pattern = r"[\n\r\t]|\\\(.*?\\\)|\\\[.*?\\\]|\$.*?\$|\\[a-zA-Z]+(?:\{.*?\})*"
+    pattern = r'\s+'
+    cleaned_text = re.sub(pattern, " ", text).strip()
 
     if VERBOSE:
-        print(text, "\nvs\n", abstract)
+        print(text, "\n was cleaned and now is: \n", cleaned_text)
 
-    return abstract
+    return cleaned_text
