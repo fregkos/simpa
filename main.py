@@ -6,13 +6,13 @@ Data & Web Science - Aristotle University of Thessaloniki
 """
 
 import os
+import defaults
 from pprint import pprint
 
 from config import parse_arguments
 from data_loader import extract_fields, load_dataset, save_dataset
 from preprocessing import create_necessary_folders, preprocess_data
 from training import train_or_load_model
-import defaults
 from keybert import KeyBERT
 
 
@@ -59,7 +59,9 @@ def main(args):
     find_similar_papers(dataset, model, top_n_results, keybert_model)
 
 
-def find_similar_papers(dataset, model, top_n_results, keybert_model):
+def find_similar_papers(
+    dataset: dict, model, top_n_results: int, keybert_model: KeyBERT
+):
 
     while True:
         query = input("Enter a query: ")
@@ -70,18 +72,24 @@ def find_similar_papers(dataset, model, top_n_results, keybert_model):
 
         similar_docs = model.dv.most_similar([query_vector], topn=top_n_results)
         keys = list(dataset.keys())
+
         for line, similarity in similar_docs:
             paper_id = keys[line]  # THIS IS EXTREMELY SLOW
             print(f"Paper ID: {paper_id}, Similarity: {similarity}")
             pprint(dataset[paper_id]["title"])
             pprint(dataset[paper_id]["abstract"])
             print("\n")
-        query_keywords = keybert_model.extract_keywords(query, keyphrase_ngram_range=(1, 3),)
-        print('Extracted keywords, based on your query:')
+
+        query_keywords = keybert_model.extract_keywords(
+            query,
+            keyphrase_ngram_range=(1, 3),
+        )
+
+        print("Extracted keywords, based on your query:")
         for keyword, similarity_to_query in query_keywords:
-            print(keyword, end=' ') # delimited by spaces instead of new lines for easy copy-pasting
-        print() # print empty new line
-        
+            # delimited by spaces instead of new lines for easy copy-pasting
+            print(keyword, end=" ")
+        print()  # print empty new line
 
 
 if __name__ == "__main__":

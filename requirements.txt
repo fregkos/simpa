@@ -4,3 +4,4 @@ gensim
 nltk
 orjson
 scikit-learn
+keybert
