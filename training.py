@@ -1,6 +1,6 @@
 import concurrent.futures
 import logging
-import os
+import os,sys
 from itertools import islice
 
 logging.basicConfig(
@@ -41,7 +41,7 @@ def preprocess_and_tag_documents(
     :param fields: The fields to preprocess.
     :return: A list of TaggedDocument objects.
     """
-    tagged_data = []
+    tagged_data,words, words_and_ids= [],[],[]
 
     progress_bar = tqdm(total=len(dataset), desc="Preprocessing papers", unit="papers")
 
@@ -49,11 +49,13 @@ def preprocess_and_tag_documents(
         # Create a concatenated doc based on all the given fields, delimited by space
         document = " ".join([dataset[paper_id][field] for field in fields])
         words = preprocess_data(document)
+        words_and_ids.append((paper_id,words))
         tagged_data.append(TaggedDocument(words, tags=[paper_id]))
         progress_bar.update(1)
     progress_bar.close()
 
-    return tagged_data
+   
+    return tagged_data,words_and_ids
 
 
 def train_doc2vec_model(tagged_data: List[TaggedDocument]) -> Doc2Vec:
@@ -105,16 +107,17 @@ def train_or_load_model(
     :return: A trained Doc2Vec model.
     """
     model = None
-
+    tagged_data,words_and_ids = preprocess_and_tag_documents(dataset, fields) # we need this for the similaruty metrics
     if os.path.exists(model_path) and not new_model:
         print("Model already exists. Loading existing model...")
         model = Doc2Vec.load(model_path)
+        # return model
     else:
         # 0. Preprocess and tag documents
-        tagged_data = preprocess_and_tag_documents(dataset, fields)
-
+        print(" before tagged data")
+        # tagged_data,words = preprocess_and_tag_documents(dataset, fields)
         print("Training Doc2Vec model...")
         model = train_doc2vec_model(tagged_data)
         model.save(model_path)
 
-    return model
+    return model,words_and_ids

@@ -2,3 +2,8 @@
 datasets/
 __pycache__/
 models/
+myvenv/
+nikolas_playground.py
+test_samples/
+models/
+.idea/
