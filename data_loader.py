@@ -4,7 +4,7 @@ import subprocess
 from typing import Iterator
 from tqdm import tqdm
 from pprint import pprint
-from preprocessing import clean_text
+from training.preprocessing import clean_text
 import defaults
 
 

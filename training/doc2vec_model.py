@@ -1,21 +1,15 @@
-import concurrent.futures
+from itertools import islice
+from typing import Dict, List
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+from gensim.models.word2vec import LineSentence
+from tqdm import tqdm
+from training.preprocessing import preprocess_data
 import logging
 import os
-from itertools import islice
 
 logging.basicConfig(
     format="%(asctime)s : %(levelname)s : %(message)s", level=logging.INFO
 )
-
-from typing import Dict, List
-
-from gensim.models.doc2vec import Doc2Vec, TaggedDocument
-from gensim.models.word2vec import LineSentence
-from tqdm import tqdm
-
-import defaults
-
-from preprocessing import preprocess_data
 
 
 def split_dataset(dataset, n):
@@ -119,3 +113,7 @@ def train_or_load_model(
         model.save(model_path)
 
     return model
+
+
+def train_or_load_classification_model():
+    pass

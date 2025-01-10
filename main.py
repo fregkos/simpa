@@ -11,8 +11,8 @@ from pprint import pprint
 
 from config import parse_arguments
 from data_loader import extract_fields, load_dataset, save_dataset
-from preprocessing import create_necessary_folders, preprocess_data
-from training import train_or_load_model
+from training.preprocessing import create_necessary_folders, preprocess_data
+from training.doc2vec_model import train_or_load_model
 from keybert import KeyBERT
 
 
