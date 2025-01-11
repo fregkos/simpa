@@ -28,10 +28,10 @@ def parse_arguments():
     parser.add_argument(
         "-f",
         "--fields",
-        type=list,
+        type=str,
         nargs="+",
-        default=["title", "abstract"],
-        help="fields to extract from the dataset",
+        default=["title", "abstract", "categories"],
+        help="fields to extract from the dataset (order matters)",
     )
     parser.add_argument(
         "-m",
