@@ -5,3 +5,5 @@ nltk
 orjson
 scikit-learn
 keybert
+sentence-transformers
+transformers
