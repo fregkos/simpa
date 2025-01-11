@@ -158,7 +158,7 @@ def load_dataset(dataset_file_path: str) -> dict:
         print(f"Data loading done, {len(dataset)}, papers")
         return dataset
     except orjson.JSONDecodeError as e:
-        print(f"Failed to decode JSON: {e}")
+        print(f"Failed to decode JSON: {e}, json path: {dataset_file_path}")
         return None
 
 
@@ -194,3 +194,60 @@ def preprocess_and_save_dataset_as_csv(dataset: dict, csv_path: str):
 
     size = os.path.getsize(csv_path) * 1e-9
     print(f"Saved CSV to {csv_path}, ~{size:.2f} GB")
+
+
+def tokenize_and_save_dataset_as_torch_tensors(dataset: dict, torch_tensor_path: str):
+    """
+    Tokenizes the dataset and saves it as a torch tensor file.
+    Args:
+        dataset (dict): The dataset to be preprocessed and saved.
+        torch_tensor_path (str): Path to the tensor file where the processed data will be saved.
+    """
+    print(f"Saving processed data as torch tensor at: {torch_tensor_path}")
+    print(f"Creating torch tensor...")
+    progress_bar = tqdm(
+        total=len(dataset), desc="Preprocessing & saving torch tensors", unit="papers"
+    )
+
+    with open(torch_tensor_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["paper_id", "categories", "doc"])
+        for paper_id in dataset.keys():
+            # Create a concatenated doc based on all the given fields, delimited by space
+            document = dataset[paper_id]["title"] + " " + dataset[paper_id]["abstract"]
+            document = " ".join(preprocess_data(document))
+            writer.writerow(
+                [
+                    paper_id,
+                    dataset[paper_id]["categories"],
+                    document,
+                ]
+            )
+            progress_bar.update(1)
+    progress_bar.close()
+
+    size = os.path.getsize(torch_tensor_path) * 1e-9
+    print(f"Saved CSV to {torch_tensor_path}, ~{size:.2f} GB")
+
+
+def read_labels(file_path):
+    """
+    Reads labels from a file and assigns an ID to each label.
+    
+    Args:
+        file_path (str): Path to the labels.txt file.
+
+    Returns:
+        dict: A dictionary where keys are label IDs (integers) and values are labels (strings).
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"The file '{file_path}' does not exist.")
+
+    labels = {}
+    with open(file_path, "r") as file:
+        for idx, line in enumerate(file):
+            label = line.strip()  # Remove any leading/trailing whitespace
+            if label:  # Skip empty lines
+                labels[idx] = label
+    
+    return labels

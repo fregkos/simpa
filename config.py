@@ -1,6 +1,6 @@
 import argparse
 from pprint import pprint
-
+import defaults
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -10,14 +10,14 @@ def parse_arguments():
         type=str,
         help="the input file path of the dataset",
         # required=True,
-        default="datasets/arxiv-metadata-oai-snapshot.json",
+        default=defaults.DATASET_PATH,
     )
     parser.add_argument(
         "-o",
         "--output_file",
         type=str,
         help="the output file path of the dataset, with the embeddings saved",
-        default="datasets/dataset.json",
+        default=defaults.CSV_PATH,
     )
     parser.add_argument(
         "-l",
@@ -38,7 +38,7 @@ def parse_arguments():
         "--model_file",
         type=str,
         help="the model file path trained on the given dataset",
-        default="models/doc2vec.model",
+        default=defaults.DOC2VEC_MODEL_PATH,
     )
     parser.add_argument(
         "-c",
@@ -66,6 +66,13 @@ def parse_arguments():
         "--verbose",
         action=argparse.BooleanOptionalAction,
         help="print verbose output of the actions that are occuring",
+        default=False,
+    )
+    parser.add_argument(
+        "-t",
+        "--transformer",
+        action=argparse.BooleanOptionalAction,
+        help="use transformer instead of doc2vec for classifying the documents",
         default=False,
     )
 
