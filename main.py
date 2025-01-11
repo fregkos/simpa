@@ -6,14 +6,16 @@ Data & Web Science - Aristotle University of Thessaloniki
 """
 
 import os
-import defaults
 from pprint import pprint
 
-from config import parse_arguments
-from data_loader import extract_fields, load_dataset, save_dataset
-from training.preprocessing import create_necessary_folders, preprocess_data
-from training.doc2vec_model import train_or_load_model
 from keybert import KeyBERT
+
+from config import parse_arguments
+from data_loader import extract_fields, load_dataset, preprocess_and_save_dataset_as_csv
+from defaults import CSV_PATH
+from training.doc2vec_model import train_or_load_model
+from training.preprocessing import create_necessary_folders, preprocess_data
+from gensim.models.doc2vec import Doc2Vec
 
 
 def main(args):
@@ -29,27 +31,20 @@ def main(args):
     new_doc2vec_model = args.new_model
     dataset = {}
 
-    # update defaults
-    # ...
-    # grab filepath from defaults
-    linesentences_file_path = defaults.LINESENTENCES_PATH
-
     # Firstly, create necessary directories if needed
     create_necessary_folders()
 
     # Check if the pruned file exists before loading it
     # And make sure the user has not asked for rebuilding the dataset from scratch
-    if os.path.exists(dataset_file_path) and not new_dataset:
+    if os.path.exists(dataset_file_path) and os.path.exists(CSV_PATH)  and not new_dataset:
         dataset = load_dataset(dataset_file_path)
     else:
         # otherwise, load the full dataset and prune it
         dataset = extract_fields(input_file_path, fields, limit, clean_text)
-        save_dataset(dataset_file_path, dataset, fields, linesentences_file_path)
+        preprocess_and_save_dataset_as_csv(dataset, CSV_PATH)
 
     # 1. Import Doc2Vec and create a new model if it doesn't exist
-    model = train_or_load_model(
-        linesentences_file_path, model_file_path, new_doc2vec_model
-    )
+    model = train_or_load_model(CSV_PATH, model_file_path, new_doc2vec_model)
 
     # 2. create KeyBERT model for keyword extraction
     keybert_model = KeyBERT()
@@ -60,7 +55,7 @@ def main(args):
 
 
 def find_similar_papers(
-    dataset: dict, model, top_n_results: int, keybert_model: KeyBERT
+    dataset: dict, model: Doc2Vec, top_n_results: int, keybert_model: KeyBERT
 ):
 
     while True:
@@ -71,14 +66,26 @@ def find_similar_papers(
         query_vector = model.infer_vector(preprocessed_query)
 
         similar_docs = model.dv.most_similar([query_vector], topn=top_n_results)
-        keys = list(dataset.keys())
+        print(f"{similar_docs=}")
 
-        for line, similarity in similar_docs:
-            paper_id = keys[line]  # THIS IS EXTREMELY SLOW
-            print(f"Paper ID: {paper_id}, Similarity: {similarity}")
-            pprint(dataset[paper_id]["title"])
-            pprint(dataset[paper_id]["abstract"])
-            print("\n")
+        # Example
+        # Compare a paper with it's categories
+        print("\n\n\nExample: Compare a paper with it's categories")
+        paper_id = "0704.0001"
+        paper_vs_self_categoies = model.dv.similarity(paper_id, dataset[paper_id]["categories"])
+        print(f"Paper ID: {paper_id},\ncategories: {dataset[paper_id]['categories']},\nSimilarity to self categories: {paper_vs_self_categoies}")
+        print("\n" * 3)
+
+        for paper_id, similarity in similar_docs:
+            try:
+                print(f"Paper ID: {paper_id}, Similarity: {similarity}")
+                pprint(dataset[paper_id]["title"])
+                pprint(dataset[paper_id]["abstract"])
+                print("\n")
+
+            except KeyError:
+                print(f"The category {paper_id} is {similarity} similar to your query.\n")
+                continue
 
         query_keywords = keybert_model.extract_keywords(
             query,

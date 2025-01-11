@@ -1,11 +1,11 @@
-import orjson
+import csv
 import os
 import subprocess
+import orjson
+from pprint import pprint
 from typing import Iterator
 from tqdm import tqdm
-from pprint import pprint
-from training.preprocessing import clean_text
-import defaults
+from training.preprocessing import clean_text, preprocess_data
 
 
 def parse_json(json_string: str) -> dict:
@@ -93,7 +93,7 @@ def fetch_data_from_json_file(file_path: str, limit: int = None) -> Iterator[dic
 
 def extract_fields(
     file_path: str,
-    fields: list = ["title", "abstract"],
+    fields: list = ["title", "abstract", "categories"],
     limit: int = None,
     should_clean_text: bool = False,
 ) -> dict:
@@ -162,33 +162,35 @@ def load_dataset(dataset_file_path: str) -> dict:
         return None
 
 
-def save_dataset(
-    dataset_file_path: str, dataset: dict, fields: list, linesentences_file_path: str
-):
+def preprocess_and_save_dataset_as_csv(dataset: dict, csv_path: str):
     """
-    Saves a dataset to a JSON file.
-
+    Preprocesses the dataset and saves it as a CSV file.
     Args:
-        dataset_file_path (str): Path where the JSON file will be saved.
-        dataset (dict): The dataset to be saved as a dictionary.
+        dataset (dict): The dataset to be preprocessed and saved.
+        csv_path (str): Path to the CSV file where the processed data will be saved.
     """
-    print(f"Dumping current dataset to {dataset_file_path}, please wait...")
+    print(f"Saving processed data to CSV: {csv_path}")
+    print(f"Creating csv...")
+    progress_bar = tqdm(
+        total=len(dataset), desc="Preprocessing & saving csv", unit="papers"
+    )
 
-    with open(dataset_file_path, "wb") as f:
-        f.write(orjson.dumps(dataset, option=orjson.OPT_SERIALIZE_NUMPY))
-    size = os.path.getsize(dataset_file_path) * 1e-9
-    print(f"Saved to {dataset_file_path}, ~{size:.2f} GB")
-
-    print(f"Creating LineSentences ...")
-    progress_bar = tqdm(total=len(dataset), desc="LineSentence creation", unit="papers")
-    with open(linesentences_file_path, "w") as f:
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["paper_id", "categories", "doc"])
         for paper_id in dataset.keys():
             # Create a concatenated doc based on all the given fields, delimited by space
-            document = " ".join([dataset[paper_id][field] for field in fields])
-            document += "\n"
-            f.write(document)
+            document = dataset[paper_id]["title"] + " " + dataset[paper_id]["abstract"]
+            document = " ".join(preprocess_data(document))
+            writer.writerow(
+                [
+                    paper_id,
+                    dataset[paper_id]["categories"],
+                    document,
+                ]
+            )
             progress_bar.update(1)
     progress_bar.close()
 
-    size = os.path.getsize(linesentences_file_path) * 1e-9
-    print(f"Saved LineSentences to {linesentences_file_path}, ~{size:.2f} GB")
+    size = os.path.getsize(csv_path) * 1e-9
+    print(f"Saved CSV to {csv_path}, ~{size:.2f} GB")
