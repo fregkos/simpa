@@ -9,8 +9,10 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
+
 class _PaperDataset(Dataset):
-    """ Obsolete code, soon to be REMOVED """
+    """Obsolete code, soon to be REMOVED"""
+
     def __init__(
         self,
         csv_path,
@@ -75,6 +77,68 @@ class _PaperDataset(Dataset):
         }
 
 
+def prepare_dataset(csv_path, 
+                    tokenizer_name, 
+                    cache_dir, 
+                    max_length, 
+                    label_list, 
+                    tokenized_data_path, 
+                    limit):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, cache_dir=cache_dir)
+    # Load CSV data
+    df = pd.read_csv(csv_path)
+    num_samples = len(df)
+
+    # Preallocate tensors for tokenized data
+    input_ids = torch.zeros((num_samples, max_length), dtype=torch.long)
+    attention_mask = torch.zeros((num_samples, max_length), dtype=torch.long)
+    labels = torch.zeros((num_samples, len(label_list)), dtype=torch.float)
+
+    # Tokenize documents and encode labels
+    label_list = label_list
+    label_list_length = len(label_list)
+    label_to_idx = {label: idx for idx, label in enumerate(label_list)}
+    # TODO look into max_length. BERT usees 512 !!! is this an issue?
+    progress_bar = tqdm(
+        total=len(df) if not limit else limit,
+        desc="Extracting tensors from papers & assigning tags",
+        unit="papers",
+    )
+    for index, row in df.iterrows():
+        if index > limit:
+            break
+        # Tokenize the document
+        tokens = tokenizer(
+            row["doc"],
+            truncation=True,
+            padding="max_length",
+            max_length=max_length,
+            return_tensors="pt",
+        )
+        # these next two lines might cause issues due to squeezing
+        # and dimensionalites
+        input_ids[index] = tokens["input_ids"].squeeze()
+        attention_mask[index] = tokens["attention_mask"].squeeze()
+
+        # Process tags and store labels
+        tags = row["categories"].split(" ")  # Assuming tags are space separated
+        for tag in tags:
+            if tag in label_to_idx:
+                labels[index][label_to_idx[tag]] = 1.0
+
+        progress_bar.update(1)
+    progress_bar.close()
+
+    # Save the tokenized dataset to disk
+    tokenized_data = {
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+        "labels": labels,
+    }
+    torch.save(tokenized_data, tokenized_data_path)
+    print(f"Tokenized dataset saved to {tokenized_data_path}")
+
+
 class PaperDataset(Dataset):
     def __init__(
         self,
@@ -84,8 +148,8 @@ class PaperDataset(Dataset):
         max_length=512,
         tokenized_data_path="tokenized_data.pt",
         cache_dir=None,
-        create_new_dataset = False,
-        limit=None
+        create_new_dataset=False,
+        limit=None,
     ):
         """
         Args:
@@ -100,23 +164,16 @@ class PaperDataset(Dataset):
         self.label_list = label_list
         self.label_list_length = len(label_list)
         self.label_to_idx = {label: idx for idx, label in enumerate(label_list)}
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name, cache_dir=cache_dir
-        )
+        self.tokenizer_name = tokenizer_name
+        self.cache_dir = cache_dir
         self.max_length = max_length
         self.limit = limit
-        # Check if tokenized data exists on disk
-        if os.path.exists(self.tokenized_data_path) and os.path.exists(csv_path) and not create_new_dataset:
-            print(f"Loading tokenized dataset from {self.tokenized_data_path}...")
-            self._load_tokenized_data()
-        else:
-            print("Tokenizing dataset...")
-            self._tokenize_and_save(csv_path)
-
-
-    
+        self._load_tokenized_data()
 
     def _tokenize_and_save(self, csv_path):
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.tokenizer_name, cache_dir=self.cache_dir
+        )
         # Load CSV data
         df = pd.read_csv(csv_path)
         num_samples = len(df)
@@ -134,8 +191,10 @@ class PaperDataset(Dataset):
 
         # TODO look into max_length. BERT usees 512 !!! is this an issue?
         progress_bar = tqdm(
-        total=len(df) if not self.limit else self.limit, desc="Extracting tensors from papers & assigning tags", unit="papers"
-    )
+            total=len(df) if not self.limit else self.limit,
+            desc="Extracting tensors from papers & assigning tags",
+            unit="papers",
+        )
         for index, row in df.iterrows():
             if index > self.limit:
                 break
@@ -147,7 +206,7 @@ class PaperDataset(Dataset):
                 max_length=self.max_length,
                 return_tensors="pt",
             )
-            # these next two lines might cause issues due to squeezing 
+            # these next two lines might cause issues due to squeezing
             # and dimensionalites
             self.input_ids[index] = tokens["input_ids"].squeeze()
             self.attention_mask[index] = tokens["attention_mask"].squeeze()
@@ -157,7 +216,7 @@ class PaperDataset(Dataset):
             for tag in tags:
                 if tag in self.label_to_idx:
                     self.labels[index][self.label_to_idx[tag]] = 1.0
-            
+
             progress_bar.update(1)
         progress_bar.close()
 

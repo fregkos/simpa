@@ -74,6 +74,12 @@ def main(args):
 
         label_list = label_dict.keys()
         # checks are performed inside this following class
+        # Check if tokenized data exists on disk
+        if os.path.exists(defaults.TOKENIZED_DATA_PATH) and os.path.exists(CSV_PATH) and not new_dataset:
+            print(f"Dataset already tokenizet, at {defaults.TOKENIZED_DATA_PATH}...")
+        else:
+            print("Tokenizing dataset...")
+            self._tokenize_and_save(CSV_PATH)
         dataset = PaperDataset(
             CSV_PATH,
             label_list,
@@ -88,8 +94,9 @@ def main(args):
             lr = 1e-3,
             batch_size=128,
             n_neurons=256,
-            labels=dataset.label_list_length
+            n_labels=dataset.label_list_length
         )
+        model._train_transformer_model()
 
         # model = transformer_model.train_transformer_model(CSV_PATH)
 
