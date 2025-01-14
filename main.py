@@ -8,7 +8,7 @@ Data & Web Science - Aristotle University of Thessaloniki
 import os
 from pprint import pprint
 
-from keybert import KeyBERT
+# from keybert import KeyBERT
 
 from config import parse_arguments
 from data_loader import extract_fields, load_dataset, preprocess_and_save_dataset_as_csv
@@ -47,15 +47,17 @@ def main(args):
     model = train_or_load_model(CSV_PATH, model_file_path, new_doc2vec_model)
 
     # 2. create KeyBERT model for keyword extraction
-    keybert_model = KeyBERT()
+    # keybert_model = KeyBERT()
 
     # 2. Find top N similar papers by asking a query from the user
     top_n_results = 5
-    find_similar_papers(dataset, model, top_n_results, keybert_model)
+    # find_similar_papers(dataset, model, top_n_results, keybert_model)
+    find_similar_papers(dataset, model, top_n_results)
 
 
 def find_similar_papers(
-    dataset: dict, model: Doc2Vec, top_n_results: int, keybert_model: KeyBERT
+    # dataset: dict, model: Doc2Vec, top_n_results: int, keybert_model: KeyBERT
+    dataset: dict, model: Doc2Vec, top_n_results: int
 ):
 
     while True:
@@ -87,16 +89,16 @@ def find_similar_papers(
                 print(f"The category {paper_id} is {similarity} similar to your query.\n")
                 continue
 
-        query_keywords = keybert_model.extract_keywords(
-            query,
-            keyphrase_ngram_range=(1, 3),
-        )
+        # query_keywords = keybert_model.extract_keywords(
+        #     query,
+        #     keyphrase_ngram_range=(1, 3),
+        # )
 
-        print("Extracted keywords, based on your query:")
-        for keyword, similarity_to_query in query_keywords:
-            # delimited by spaces instead of new lines for easy copy-pasting
-            print(keyword, end=" ")
-        print()  # print empty new line
+        # print("Extracted keywords, based on your query:")
+        # for keyword, similarity_to_query in query_keywords:
+        #     # delimited by spaces instead of new lines for easy copy-pasting
+        #     print(keyword, end=" ")
+        # print()  # print empty new line
 
 
 if __name__ == "__main__":
