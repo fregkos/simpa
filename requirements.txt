@@ -5,5 +5,11 @@ nltk
 orjson
 scikit-learn
 keybert
+tensorflow[and-cuda]
+numpy
+pandas
+matplotlib
+iterative-stratification
+focal-loss
 sentence-transformers
 transformers

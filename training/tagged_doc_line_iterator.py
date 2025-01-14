@@ -23,8 +23,9 @@ class TaggedDocumentLineIterator:
             next(reader)
 
             for row in reader:
-                paper_id, categories, doc = row
+                paper_id, hyperclasses, categories, _, _, doc = row
+                hyperclasses = hyperclasses.split(" ")
                 categories = categories.split(" ")
-                tags = [paper_id] + categories
+                tags = [paper_id] + categories + hyperclasses
                 text = doc.split(" ")
                 yield TaggedDocument(text, tags=tags)

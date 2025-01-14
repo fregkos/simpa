@@ -1,11 +1,14 @@
 import csv
 import os
 import subprocess
-import orjson
 from pprint import pprint
 from typing import Iterator
+
+import orjson
 from tqdm import tqdm
-from training.preprocessing import clean_text, preprocess_data
+
+from defaults import HYPERCLASSES_PATH
+from training.preprocessing import fix_tag, preprocess_data
 
 
 def parse_json(json_string: str) -> dict:
@@ -95,7 +98,6 @@ def extract_fields(
     file_path: str,
     fields: list = ["title", "abstract", "categories"],
     limit: int = None,
-    should_clean_text: bool = False,
 ) -> dict:
     """
     Extract fields from a JSON file. The function reads each line of the file,
@@ -122,11 +124,6 @@ def extract_fields(
             print("Failed to parse this data. Skipping it.")
             pprint(data)
             continue
-
-        # clean title as well, as some titles have '\n' characters
-        data["title"] = clean_text(data["title"])
-        if "abstract" in fields and should_clean_text:
-            data["abstract"] = clean_text(data["abstract"])
 
         dataset[data["id"]] = {key: data[key] for key in fields if key in data}
         progress_bar.update(1)
@@ -175,17 +172,37 @@ def preprocess_and_save_dataset_as_csv(dataset: dict, csv_path: str):
         total=len(dataset), desc="Preprocessing & saving csv", unit="papers"
     )
 
+    hyperclasses = []
+    with open(HYPERCLASSES_PATH, "r") as f:
+        for line in f.readlines():
+            hyperclasses.append(line.strip())
+
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["paper_id", "categories", "doc"])
+        writer.writerow(
+            [
+                "paper_id",
+                "hyperclasses",
+                "categories",
+                "title",
+                "abstract",
+                "preprocessed_doc",
+            ]
+        )
         for paper_id in dataset.keys():
             # Create a concatenated doc based on all the given fields, delimited by space
             document = dataset[paper_id]["title"] + " " + dataset[paper_id]["abstract"]
             document = " ".join(preprocess_data(document))
+
             writer.writerow(
                 [
                     paper_id,
+                    get_hyperclasses_from_categories(
+                        dataset[paper_id]["categories"].split(" "), hyperclasses
+                    ),
                     dataset[paper_id]["categories"],
+                    dataset[paper_id]["title"],
+                    dataset[paper_id]["abstract"],
                     document,
                 ]
             )
@@ -194,6 +211,32 @@ def preprocess_and_save_dataset_as_csv(dataset: dict, csv_path: str):
 
     size = os.path.getsize(csv_path) * 1e-9
     print(f"Saved CSV to {csv_path}, ~{size:.2f} GB")
+
+
+def get_hyperclasses_from_categories(
+    categories: list[str], real_hyperclasses: list[str]
+) -> list[str]:
+    multiclasses = []
+
+    # Find all multiclasses in real hyperclasses
+    # For example physics has many subcategories like physics, physics/quantum, etc.
+    for hyperclass in real_hyperclasses:
+        is_multiclass = "," in hyperclass
+        if is_multiclass:
+            multiclasses = hyperclass.split(",")
+
+    hyperclasses = set()
+
+    for category in categories:
+        category = fix_tag(category)
+        hyperclass = category.split(".")[0]
+
+        if hyperclass in multiclasses:
+            hyperclasses.add(multiclasses[0])
+        else:
+            hyperclasses.add(hyperclass)
+
+    return " ".join(hyperclasses)
 
 
 def tokenize_and_save_dataset_as_torch_tensors(dataset: dict, torch_tensor_path: str):

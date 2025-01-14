@@ -1,5 +1,7 @@
-.venv/
+.venv*/
 datasets/*
+!datasets/arxiv-*.txt
 __pycache__/
 models/*
 !datasets/labels.txt
+*.log

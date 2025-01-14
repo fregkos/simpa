@@ -29,8 +29,8 @@ def preprocess_data(document: str) -> List[str]:
         List[str]: A list of preprocessed words from the concatenated document.
     """
 
-    # Convert the entire document to lower case
-    document = document.lower()
+    # Clean and convert the entire document to lower case
+    document = clean_text(document.lower())
 
     # Tokenize the words in the document
     words = word_tokenize(document)
@@ -64,3 +64,85 @@ def clean_text(text: str) -> str:
         print(f"{text}\nwas cleaned and now is:\n{cleaned_text}")
 
     return cleaned_text
+
+
+def fix_tag(tag):
+    if tag == "chem-ph":
+        tag = "physics.chem-ph"
+    elif tag == "plasm-ph":
+        tag = "physics.plasm-ph"
+    elif tag == "mtrl-th":
+        tag = "cond-mat.mtrl-th"
+    elif tag == "atom-ph":
+        tag = "physics.atom-ph"
+    elif tag == "comp-gas":
+        tag = "nlin.CG"
+    elif tag == "cmp-lg":
+        tag = "cs.CL"
+    elif tag == "funct-an":
+        tag = "math.FA"
+    elif tag == "adap-org":
+        tag = "nlin.AO"
+    elif tag == "acc-phys":
+        tag = "nlin.CD"
+    elif tag == "ao-sci":
+        tag = "physics.ao-ph"
+    elif tag == "patt-sol":
+        tag = "nlin.PS"
+    elif tag == "solv-int":
+        tag = "nlin.SI"
+    elif tag == "supr-con":
+        tag = "cond-mat.supr-con"
+    elif tag == "bayes-an":
+        tag = "physics.data-an"
+    elif tag == "q-alg":
+        tag = "math.QA"
+    elif tag == "dg-ga":
+        tag = "math.DG"
+    elif tag == "alg-geom":
+        tag = "math.AG"
+    elif tag == "chao-dyn":
+        tag = "nlin.CD"
+
+    return tag
+
+
+def fix_tag_hyperclass(tag: str):
+    if tag == "chem-ph":
+        tag = "physics"
+    elif tag == "plasm-ph":
+        tag = "physics"
+    elif tag == "mtrl-th":
+        tag = "physics"
+    elif tag == "atom-ph":
+        tag = "physics"
+    elif tag == "comp-gas":
+        tag = "physics"
+    elif tag == "cmp-lg":
+        tag = "cs"
+    elif tag == "funct-an":
+        tag = "math"
+    elif tag == "adap-org":
+        tag = "physics"
+    elif tag == "acc-phys":
+        tag = "physics"
+    elif tag == "ao-sci":
+        tag = "physics"
+    elif tag == "patt-sol":
+        tag = "physics"
+    elif tag == "solv-int":
+        tag = "physics"
+    elif tag == "supr-con":
+        tag = "physics"
+    elif tag == "bayes-an":
+        tag = "physics"
+    elif tag == "q-alg":
+        tag = "math"
+    elif tag == "dg-ga":
+        tag = "math"
+    elif tag == "alg-geom":
+        tag = "math"
+    elif tag == "chao-dyn":
+        tag = "phycics"
+
+    return tag
