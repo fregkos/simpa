@@ -29,8 +29,8 @@ def preprocess_data(document: str) -> List[str]:
         List[str]: A list of preprocessed words from the concatenated document.
     """
 
-    # Convert the entire document to lower case
-    document = document.lower()
+    # Clean and convert the entire document to lower case
+    document = clean_text(document.lower())
 
     # Tokenize the words in the document
     words = word_tokenize(document)

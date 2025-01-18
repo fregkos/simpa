@@ -1,11 +1,14 @@
 import csv
 import os
 import subprocess
-import orjson
 from pprint import pprint
 from typing import Iterator
+
+import orjson
 from tqdm import tqdm
-from training.preprocessing import clean_text, preprocess_data
+
+from defaults import HYPERCLASSES_PATH
+from training.preprocessing import preprocess_data
 
 
 def parse_json(json_string: str) -> dict:
@@ -95,7 +98,6 @@ def extract_fields(
     file_path: str,
     fields: list = ["title", "abstract", "categories"],
     limit: int = None,
-    should_clean_text: bool = False,
 ) -> dict:
     """
     Extract fields from a JSON file. The function reads each line of the file,
@@ -122,11 +124,6 @@ def extract_fields(
             print("Failed to parse this data. Skipping it.")
             pprint(data)
             continue
-
-        # clean title as well, as some titles have '\n' characters
-        data["title"] = clean_text(data["title"])
-        if "abstract" in fields and should_clean_text:
-            data["abstract"] = clean_text(data["abstract"])
 
         dataset[data["id"]] = {key: data[key] for key in fields if key in data}
         progress_bar.update(1)
@@ -176,7 +173,7 @@ def preprocess_and_save_dataset_as_csv(dataset: dict, csv_path: str):
     )
 
     hyperclasses = []
-    with open("arxiv-hyperclasses.txt", "r") as f:
+    with open(HYPERCLASSES_PATH, "r") as f:
         for line in f.readlines():
             hyperclasses.append(line.strip())
 
