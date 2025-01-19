@@ -27,92 +27,152 @@ from .paper_dataset import PaperDataset
 import defaults
 
 
+class FocalBCELoss(nn.Module):
+    def __init__(self, num_labels=155):
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss(
+            pos_weight=torch.ones(num_labels) * 10  # Start with high positive weight
+        )
+
+    def forward(self, outputs, targets):
+        # BCE loss
+        bce_loss = self.bce(outputs, targets)
+
+        # Add penalty for predicting all zeros
+        prob_outputs = torch.sigmoid(outputs)
+        all_zeros_penalty = torch.mean((1 - prob_outputs).pow(2))
+
+        return bce_loss + 0.1 * all_zeros_penalty
+
+
+# criterion = FocalBCELoss()
+
+
 class TransformerClassifier:
     def __init__(
         self,
-        dataset: PaperDataset,
-        create_new_model: bool = False,
+        CSV_PATH: str,
+        label_list: list,  # Number of labels for multi-label classification
         epochs: int = 50,
         lr: float = 1e-3,
         batch_size: int = 128,
-        n_neurons: int = 256,
-        n_labels: int = 155,  # Number of labels for multi-label classification
+        n_neurons: int = 128,
         threshold: float = 0.9,
+        tokenizer_name="bert-base-uncased",
     ):
         self.VEC_DIM = 768
-        self.dataset = dataset  # the PaperDataset
         self.epochs = epochs
         self.lr = lr
         self.batch_size = batch_size
         self.n_neurons = n_neurons
-        self.n_labels = n_labels
+        self.n_labels = len(label_list)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.trunk = AutoModel.from_pretrained(
             "nomic-ai/nomic-embed-text-v1.5",
             trust_remote_code=True,
             safe_serialization=True,
-        ).to(self.device)
-
+        )
+        self.tokenizer_name = tokenizer_name
+        # freeze transformer weights
         for param in self.trunk.parameters():
             param.requires_grad = False
+        self.trunk.to(device=self.device)
 
         # Define the head for multi-label classification
-        self.head = nn.Sequential(
-            nn.Linear(self.VEC_DIM, self.n_neurons),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(self.n_neurons, self.n_labels),
+        self.head = nn.Sequential( # simple head
+            nn.Linear(self.VEC_DIM, self.n_labels)
             # No Sigmoid here, we use BCEWithLogitsLoss which combines sigmoid
         ).to(self.device)
 
         # Optimizer and loss function
         self.optimizer = torch.optim.Adam(
-            list(self.trunk.parameters()) + list(self.head.parameters()), lr=self.lr,
+            self.head.parameters(),
+            lr=self.lr,
         )
-        self.criterion = nn.BCEWithLogitsLoss()  # Use BCEWithLogitsLoss for multi-label classification
-        self.dataloader = DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
+        self.dataset = PaperDataset(
+            CSV_PATH, label_list, tokenized_data_path=defaults.TOKENIZED_DATA_PATH
+        )
+        # self.dataloader = DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
+        # self.criterion = nn.BCELoss()
+        self.criterion = (
+            nn.BCEWithLogitsLoss()
+        )  # Use BCEWithLogitsLoss for multi-label classification
+        self.criterion = FocalBCELoss(len(label_list)).to(self.device)
         self.threshold = threshold
+
     def train_or_load_transformer_model(self):
         pass
 
-    def _train_transformer_model(self, ):
+    def _train_transformer_model(
+        self,
+    ):
         # Split into train and test datasets
         train_size = int(0.8 * len(self.dataset))
         test_size = len(self.dataset) - train_size
-        train_dataset, test_dataset = random_split(self.dataset, [train_size, test_size])
+        train_dataset, test_dataset = random_split(
+            self.dataset, [train_size, test_size]
+        )
 
         # Create DataLoaders for training and validation
         train_loader = DataLoader(
-            train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=1, pin_memory=True
+            train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
         )
         val_loader = DataLoader(
-            test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=1, pin_memory=True
+            test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
         )
 
         # Store metrics
         training_metrics = {"loss": [], "accuracy": []}
         validation_metrics = {"loss": [], "accuracy": []}
+        tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name, cache_dir=None)
 
+        progress_bar_epoch = tqdm(
+            total=self.epochs,
+            desc="Training epoch",
+            unit="epoch",
+        )
         for epoch in range(self.epochs):
             # Training phase
-            self.trunk.train()
+            self.trunk.eval()  # let this be .eval()! and disable any dropout etc layers!
             self.head.train()
 
             total_train_loss = 0
             correct_train = 0
             total_train_samples = 0
-
             for batch in train_loader:
-                input_ids = batch["input_ids"].to(self.device)
-                attention_mask = batch["attention_mask"].to(self.device)
+                # input_ids = batch["input_ids"].to(self.device)
+                # attention_mask = batch["attention_mask"].to(self.device)
                 labels = batch["labels"].float().to(self.device)
 
+                # encoded_input = batch['doc']
+
+                encoded_input = tokenizer(
+                    batch["doc"],
+                    truncation=True,
+                    padding="max_length",
+                    max_length=512,
+                    return_tensors="pt",
+                ).to(self.device)
                 # Forward pass
                 with torch.no_grad():  # No gradients for the transformer trunk
-                    model_output = self.trunk(input_ids=input_ids, attention_mask=attention_mask)
-                    embeddings = self._mean_pooling(model_output, attention_mask)
+                    # model_output = self.trunk(input_ids=input_ids, attention_mask=attention_mask)
+                    model_output = self.trunk(**encoded_input)
+                    # [128, 253, 768] -> [128, 1, 768] -> [128, 768]
+                    # [128 true labels] =~= [128 predicted labels]
+                    embeddings = self._mean_pooling(
+                        model_output, encoded_input["attention_mask"]
+                    )
+                    
 
-                logits = self.head(embeddings)
+                logits = self.head(embeddings)  # 768 -> 155
 
                 # Compute loss
                 loss = self.criterion(logits, labels)
@@ -124,10 +184,24 @@ class TransformerClassifier:
                 self.optimizer.step()
 
                 # Compute accuracy (multi-label)
-                pred_labels = torch.sigmoid(logits)  # Apply sigmoid to get probabilities
-                pred_labels = (pred_labels > self.threshold).float()  # Use threshold to classify as 0 or 1
+                pred_labels = torch.sigmoid(
+                    logits
+                )  # Apply sigmoid to get probabilities
+                pred_labels = (
+                    pred_labels > self.threshold
+                ).float()  # Use threshold to classify as 0 or 1
+                # progress_bar_epoch.write(f'predicted: {pred_labels.sum(1)} \n real: {labels.sum(1)} \n predictions: {((pred_labels == 1) & (labels == 1)).sum(1)}')
+                # progress_bar_epoch.write(f'predictions: {((pred_labels == 1) & (labels == 1)).sum(1)}')
+                # This will count all positions where both tensors have 1s
+                correct_train += (
+                    ((pred_labels == 1) & (labels == 1)).float().sum().item()
+                )
 
-                correct_train += (pred_labels == labels).float().sum().item()
+                # If you also want to track precision/recall, you might want:
+                # true_positives = ((pred_labels == 1) & (labels == 1)).float().sum().item()
+                # false_positives = ((pred_labels == 1) & (labels == 0)).float().sum().item()
+                # false_negatives = ((pred_labels == 0) & (labels == 1)).float().sum().item()
+                # 128 * 155 = 19840
                 total_train_samples += labels.numel()
 
             avg_train_loss = total_train_loss / len(train_loader)
@@ -146,13 +220,25 @@ class TransformerClassifier:
 
             with torch.no_grad():
                 for batch in val_loader:
-                    input_ids = batch["input_ids"].to(self.device)
-                    attention_mask = batch["attention_mask"].to(self.device)
+                    # input_ids = batch["input_ids"].to(self.device)
+                    # attention_mask = batch["attention_mask"].to(self.device)
                     labels = batch["labels"].float().to(self.device)
 
+                    encoded_input = tokenizer(
+                        batch["doc"],
+                        truncation=True,
+                        padding="max_length",
+                        max_length=512,
+                        return_tensors="pt",
+                    ).to(self.device)
+
                     # Forward pass
-                    model_output = self.trunk(input_ids=input_ids, attention_mask=attention_mask)
-                    embeddings = self._mean_pooling(model_output, attention_mask)
+                    # model_output = self.trunk(input_ids=input_ids, attention_mask=attention_mask)
+                    model_output = self.trunk(**encoded_input)
+                    embeddings = self._mean_pooling(
+                        model_output, encoded_input["attention_mask"]
+                    )
+                    
                     logits = self.head(embeddings)
 
                     # Compute loss
@@ -160,10 +246,16 @@ class TransformerClassifier:
                     total_val_loss += loss.item()
 
                     # Compute accuracy (multi-label)
-                    pred_labels = torch.sigmoid(logits)  # Apply sigmoid to get probabilities
-                    pred_labels = (pred_labels > 0.9).float()  # Use threshold to classify as 0 or 1
+                    pred_labels = torch.sigmoid(
+                        logits
+                    )  # Apply sigmoid to get probabilities
+                    pred_labels = (
+                        pred_labels > self.threshold
+                    ).float()  # Use threshold to classify as 0 or 1
 
-                    correct_val += (pred_labels == labels).float().sum().item()
+                    correct_val += (
+                        ((pred_labels == 1) & (labels == 1)).float().sum().item()
+                    )
                     total_val_samples += labels.numel()
 
             avg_val_loss = total_val_loss / len(val_loader)
@@ -172,13 +264,15 @@ class TransformerClassifier:
             validation_metrics["loss"].append(avg_val_loss)
             validation_metrics["accuracy"].append(val_accuracy)
 
-            # Print metrics for the current epoch
-            print(
+            # Print metrics for the current epoch, keeping the progress bar
+            # at the bottom of the terminal using .write(str)
+            progress_bar_epoch.write(
                 f"Epoch {epoch + 1}/{self.epochs}, "
-                f"Train Loss: {avg_train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, "
-                f"Val Loss: {avg_val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}"
+                f"Train Loss: {avg_train_loss:.8e}, Train Accuracy: {train_accuracy:.8e}, "
+                f"Val Loss: {avg_val_loss:.8e}, Val Accuracy: {val_accuracy:.8e}"
             )
-
+            progress_bar_epoch.update(1)
+        progress_bar_epoch.close()
         # Return the metrics
         return training_metrics, validation_metrics
 
@@ -188,53 +282,9 @@ class TransformerClassifier:
         input_mask_expanded = (
             attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
         )
-        return torch.sum(token_embeddings * input_mask_expanded, dim=1) / torch.clamp(
+        embeddings = torch.sum(token_embeddings * input_mask_expanded, dim=1) / torch.clamp(
             input_mask_expanded.sum(1), min=1e-9
         )
+        embeddings = F.normalize(embeddings, p=2, dim=1)
+        return embeddings
 
-
-# In order to classify a document based on the sentence transformer
-# we need to prepend the 'classification: ' text before each piece of text ?
-# based on https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
-def mean_pooling(model_output, attention_mask):
-    token_embeddings = model_output[0]
-    # print("token_embeddings size: ", token_embeddings.size())
-    input_mask_expanded = (
-        attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-    )
-    return torch.sum(token_embeddings * input_mask_expanded, dim=1) / torch.clamp(
-        input_mask_expanded.sum(1), min=1e-9
-    )
-
-
-def train_transformer_model(csv_path: str):
-    sentences = ["classification: the quick brown fox jumped over the fence"]
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    model = AutoModel.from_pretrained(
-        "nomic-ai/nomic-embed-text-v1.5",
-        trust_remote_code=True,
-        safe_serialization=True,
-    )
-
-    model = model.to(device)
-    model.eval()
-    encoded_input = tokenizer(
-        sentences, padding=True, truncation=True, return_tensors="pt"
-    )
-    # move to appropriate device
-    encoded_input = {
-        key: value.to(device) for key, value in encoded_input.items()
-    }  # Move tensors to GPU
-
-    print(f"{encoded_input=}")
-    with torch.no_grad():
-        model_output = model(**encoded_input)
-
-    attention_mask = encoded_input["attention_mask"]
-    embeddings = mean_pooling(model_output, attention_mask)
-
-    embeddings = F.normalize(embeddings, p=2, dim=1)
-    embeddings = embeddings.cpu()
-    print("final embedding size: ", embeddings.size())

@@ -75,7 +75,13 @@ def parse_arguments():
         help="use transformer instead of doc2vec for classifying the documents",
         default=False,
     )
-
+    parser.add_argument(
+        "-ee",
+        "--extract_embeddings",
+        action=argparse.BooleanOptionalAction,
+        help="extract embeddings from dataset anew (even if they already exist) for faster classification",
+        default=False,
+    )
     return parser.parse_args()
 
 

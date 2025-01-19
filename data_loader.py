@@ -243,11 +243,11 @@ def read_labels(file_path):
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"The file '{file_path}' does not exist.")
 
-    labels = {}
+    labels = []
     with open(file_path, "r") as file:
         for idx, line in enumerate(file):
             label = line.strip()  # Remove any leading/trailing whitespace
             if label:  # Skip empty lines
-                labels[idx] = label
+                labels.append(label)
     
     return labels

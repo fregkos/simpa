@@ -24,10 +24,14 @@ from training.preprocessing import create_necessary_folders, preprocess_data
 from gensim.models.doc2vec import Doc2Vec
 import defaults
 
-from training.paper_dataset import PaperDataset
+from training.paper_dataset import PaperDataset, prepare_and_tokenize_dataset
+from training.hierarchical_transformer_model import HierarchicalClassifier
+from training import hierarchical_paper_dataset
+from defaults import categorized_labels
 
 
 def main(args):
+    os.environ["TOKENIZERS_PARALLELISM"] = "true"
     limit = args.limit
     fields = args.fields
 
@@ -39,6 +43,7 @@ def main(args):
     new_dataset = args.new_dataset
     create_new_model = args.new_model
     use_transformer = args.transformer
+    extract_embeddings = args.extract_embeddings
     dataset = {}
 
     # Firstly, create necessary directories if needed
@@ -70,35 +75,46 @@ def main(args):
         top_n_results = 5
         find_similar_papers(dataset, model, top_n_results, keybert_model)
     else:  # if use_transformer
-        label_dict = read_labels(defaults.LABELS_PATH)
+        label_list = read_labels(defaults.LABELS_PATH)
 
-        label_list = label_dict.keys()
         # checks are performed inside this following class
         # Check if tokenized data exists on disk
-        if os.path.exists(defaults.TOKENIZED_DATA_PATH) and os.path.exists(CSV_PATH) and not new_dataset:
-            print(f"Dataset already tokenizet, at {defaults.TOKENIZED_DATA_PATH}...")
+        if (
+            os.path.exists(defaults.TOKENIZED_DATA_PATH)
+            and os.path.exists(CSV_PATH)
+            and not new_dataset
+        ):
+            print(
+                f"Dataset already tokenized, at {defaults.HIERARCHICAL_TOKENIZED_DATA_PATH}..."
+            )
         else:
             print("Tokenizing dataset...")
-            self._tokenize_and_save(CSV_PATH)
-        dataset = PaperDataset(
+            hierarchical_paper_dataset.prepare_and_tokenize_dataset(
+                CSV_PATH,
+                label_list,
+                hyperclasses=list(categorized_labels.keys()),
+                categorized_labels=categorized_labels,
+            )
+        
+        classifier = HierarchicalClassifier(
             CSV_PATH,
-            label_list,
-            tokenized_data_path=defaults.TOKENIZED_DATA_PATH,
-            create_new_dataset=new_dataset,
-            limit=limit,
+            hyperclass_list=list(categorized_labels.keys()),
+            label_list=[
+                label for labels in categorized_labels.values() for label in labels
+            ],
+            hyperclass_to_label_map=categorized_labels,
+            batch_size=352,  # it's just tensors after all
+            lr=8e-2,
+            threshold=.5,
         )
-        model = transformer_model.TransformerClassifier(
-            dataset,
-            create_new_model=create_new_model,
-            epochs = 50,
-            lr = 1e-3,
-            batch_size=128,
-            n_neurons=256,
-            n_labels=dataset.label_list_length
-        )
-        model._train_transformer_model()
-
-        # model = transformer_model.train_transformer_model(CSV_PATH)
+        
+        # if the embeddings have already been extracted
+        # or if we were instructed to extract them
+        if not os.path.exists(defaults.HIERARCHICAL_EMBEDDINGS_DATA_PATH) or extract_embeddings:
+            classifier.extract_and_save_embeddings() # this should be done only once!
+        
+        
+        classifier.train()
 
 
 def find_similar_papers(

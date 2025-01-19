@@ -14,7 +14,7 @@ CSV_PATH = os.path.join(DATASETS_PATH, "tagged_line_docs.csv")
 LABELS_PATH = os.path.join(DATASETS_PATH, "labels.txt")
 TOKENIZED_DATA_PATH = os.path.join(DATASETS_PATH, "tokenized_data.pt")
 HIERARCHICAL_TOKENIZED_DATA_PATH = os.path.join(DATASETS_PATH, "hierarchical_tokenized_data.pt")
-HIERARCHICAL_EMBEDDINGS_DATA_PATH = os.path.join(DATASETS_PATH, "hierarchical_extracted_vectors.pt")
+HIERARCHICAL_EMBEDDINGS_DATA_PATH = os.path.join(DATASETS_PATH, "hierarchical_extracted_embeddings.pt")
 categorized_labels = {
     "Computer Science": [
         "cs.AI",
