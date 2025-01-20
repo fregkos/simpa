@@ -10,10 +10,7 @@ import os
 from config import parse_arguments
 from data_loader import extract_fields, preprocess_and_save_dataset_as_csv
 from defaults import CSV_PATH
-from training.doc2vec_model import (
-    train_or_load_classification_model,
-    train_or_load_model,
-)
+from training.doc2vec_model import train_or_load_classification_model
 from training.preprocessing import create_necessary_folders
 
 
@@ -32,11 +29,10 @@ def main(args):
         dataset = extract_fields(input_file_path, fields, limit)
         preprocess_and_save_dataset_as_csv(dataset, CSV_PATH)
 
-    # 1. Import Doc2Vec and create a new model if it doesn't exist
-    embedding_model = train_or_load_model(CSV_PATH, model_file_path, new_doc2vec_model)
-
     # 2. Train the classification model using the Doc2Vec embeddings
-    model, history = train_or_load_classification_model(embedding_model)
+    model, history = train_or_load_classification_model(
+        model_file_path, new_doc2vec_model
+    )
 
 
 if __name__ == "__main__":

@@ -8,3 +8,6 @@ keybert
 tensorflow[and-cuda]
 numpy
 pandas
+matplotlib
+iterative-stratification
+focal-loss

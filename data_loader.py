@@ -8,7 +8,7 @@ import orjson
 from tqdm import tqdm
 
 from defaults import HYPERCLASSES_PATH
-from training.preprocessing import preprocess_data
+from training.preprocessing import fix_tag, preprocess_data
 
 
 def parse_json(json_string: str) -> dict:
@@ -228,6 +228,7 @@ def get_hyperclasses_from_categories(
     hyperclasses = set()
 
     for category in categories:
+        category = fix_tag(category)
         hyperclass = category.split(".")[0]
 
         if hyperclass in multiclasses:
