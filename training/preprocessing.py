@@ -143,6 +143,6 @@ def fix_tag_hyperclass(tag: str):
     elif tag == "alg-geom":
         tag = "math"
     elif tag == "chao-dyn":
-        tag = "phycics"
+        tag = "physics"
 
     return tag

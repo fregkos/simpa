@@ -3,8 +3,12 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 from tqdm import tqdm
 import os
+from data_loader import read_labels
 import defaults
 import torch.nn.functional as F
+from training import hierarchical_paper_dataset
+from training.hierarchical_transformer_model import HierarchicalClassifier
+from defaults import categorized_labels
 
 
 # Data cleanup for tags that are not available in the preZ categories
@@ -43,6 +47,51 @@ def _fix_tag(tag):
         tag = "math.DG"
 
     return tag
+
+
+def create_or_load_hierarchical_classifier(new_dataset, extract_embeddings):
+    label_list = read_labels(defaults.LABELS_PATH)
+
+    # checks are performed inside this following class
+    # Check if tokenized data exists on disk
+    if (
+        os.path.exists(defaults.TOKENIZED_DATA_PATH)
+        and os.path.exists(defaults.CSV_PATH)
+        and not new_dataset
+    ):
+        print(
+            f"Dataset already tokenized, at {defaults.HIERARCHICAL_TOKENIZED_DATA_PATH}..."
+        )
+    else:
+        print("Tokenizing dataset...")
+        hierarchical_paper_dataset.prepare_and_tokenize_dataset(
+            defaults.CSV_PATH,
+            label_list,
+            hyperclasses=list(categorized_labels.keys()),
+            categorized_labels=categorized_labels,
+        )
+
+    classifier = HierarchicalClassifier(
+        defaults.CSV_PATH,
+        hyperclass_list=list(categorized_labels.keys()),
+        label_list=[
+            label for labels in categorized_labels.values() for label in labels
+        ],
+        hyperclass_to_label_map=categorized_labels,
+        batch_size=352,  # it's just tensors after all
+        lr=8e-2,
+        threshold=0.5,
+    )
+
+    # if the embeddings have already been extracted
+    # or if we were instructed to extract them
+    if (
+        not os.path.exists(defaults.HIERARCHICAL_EMBEDDINGS_DATA_PATH)
+        or extract_embeddings
+    ):
+        classifier.extract_and_save_embeddings()  # this should be done only once!
+
+    classifier.train()
 
 
 def prepare_and_tokenize_dataset(
@@ -112,7 +161,6 @@ def prepare_and_tokenize_dataset(
     print(f"Hierarchical dataset saved to {tokenized_data_path}")
 
 
-
 class HierarchicalPaperDataset(Dataset):
     def __init__(
         self,
@@ -157,8 +205,9 @@ class HierarchicalPaperDataset(Dataset):
 
         # if not os.path.exists(tokenized_data_path):
         #     prepare_and_tokenize_dataset()
-        self._load_tokenized_data() #should be called after
+        self._load_tokenized_data()  # should be called after
         self.embeddings = 0
+
     def _load_tokenized_data(self):
         """Load the processed dataset from disk"""
         tokenized_data = torch.load(self.tokenized_data_path)
@@ -168,9 +217,10 @@ class HierarchicalPaperDataset(Dataset):
         self.documents = df["doc"]
         # this should be done from this file ? but we cant, as we have to load the trunk and the tokenizer ?
 
-    def _load_embeddings(self, embedding_path=defaults.HIERARCHICAL_EMBEDDINGS_DATA_PATH):
+    def _load_embeddings(
+        self, embedding_path=defaults.HIERARCHICAL_EMBEDDINGS_DATA_PATH
+    ):
         self.embeddings = torch.load(embedding_path)
-
 
     # hamming loss
     # 0 1 1 0 target
@@ -187,7 +237,7 @@ class HierarchicalPaperDataset(Dataset):
     def __getitem__(self, idx):
         """Get both hyperclass and detailed labels for a document"""
         # Get the document and its labels
-        doc = "classification: "+ self.documents[idx]
+        doc = "classification: " + self.documents[idx]
         hyperclass_label = self.hyperclass_labels[idx]
         detailed_label = self.detailed_labels[idx]
 
@@ -197,7 +247,11 @@ class HierarchicalPaperDataset(Dataset):
             for i in range(len(self.hyperclasses))
             if hyperclass_label[i] == 1
         ]
-        embedding = self.embeddings[idx] if isinstance(self.embeddings, torch.Tensor) else torch.zeros((1,1))
+        embedding = (
+            self.embeddings[idx]
+            if isinstance(self.embeddings, torch.Tensor)
+            else torch.zeros((1, 1))
+        )
         return {
             "doc": doc,
             "hyperclass_labels": hyperclass_label,
@@ -224,5 +278,3 @@ class HierarchicalPaperDataset(Dataset):
         }
 
         return hyperclass_stats, detailed_stats
-
-    

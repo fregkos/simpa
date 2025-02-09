@@ -13,3 +13,4 @@ iterative-stratification
 focal-loss
 sentence-transformers
 transformers
+seaborn

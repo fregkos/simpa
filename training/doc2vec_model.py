@@ -1,6 +1,7 @@
 import gc
 import logging
 import os
+import plot
 from multiprocessing import cpu_count
 from pprint import pprint
 from typing import Iterable
@@ -12,7 +13,6 @@ import pandas as pd
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 from sklearn.metrics import classification_report, multilabel_confusion_matrix
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 import tensorflow as tf
 from focal_loss import BinaryFocalLoss
@@ -76,12 +76,15 @@ def train_or_load_model(
 
 # def train_or_load_classification_model(embedding_model: Doc2Vec):
 def train_or_load_classification_model(model_file_path, new_doc2vec_model):
-    # 1. Import Doc2Vec and create a new model if it doesn't exist
-    embedding_model = train_or_load_model(CSV_PATH, model_file_path, new_doc2vec_model)
-
     model_path = os.path.join(MODELS_PATH, "model.keras")
     if os.path.exists(model_path):
+        print("Model already exists. Loading existing model...")
         return keras.models.load_model("model.keras"), None
+    else:
+        print("Model does not exist. Training classification model...")
+
+    # 1. Import Doc2Vec and create a new model if it doesn't exist
+    embedding_model = train_or_load_model(CSV_PATH, model_file_path, new_doc2vec_model)
 
     data = pd.read_csv(CSV_PATH, dtype=str)
 
@@ -90,6 +93,12 @@ def train_or_load_classification_model(model_file_path, new_doc2vec_model):
         col for col in data.columns if col not in columns_to_keep
     ]  # ["categories", "title", "abstract", "preprocessed_doc"]
     data.drop(columns_to_drop, axis=1, inplace=True)
+
+    # Select randomly X data
+    WANTED_VALUES = 500_000
+    np.random.seed(42)
+    random_indices = np.random.choice(len(data), WANTED_VALUES, replace=False)
+    data = data.iloc[random_indices]
 
     data["hyperclasses"] = data["hyperclasses"].apply(lambda x: x.split(" "))
     data["hyperclasses"] = data["hyperclasses"].apply(
@@ -141,7 +150,6 @@ def train_or_load_classification_model(model_file_path, new_doc2vec_model):
         train_indices.extend(train_index)
         print(f"Train index: {train_index}")
 
-
     train_indices = np.unique(train_indices)
     test_indices = np.unique(test_indices)
 
@@ -151,6 +159,11 @@ def train_or_load_classification_model(model_file_path, new_doc2vec_model):
 
     X_test_stratified = X[test_indices]
     y_test_stratified = y_bin[test_indices]
+
+    np.save("X_train_stratified.npy", X_train_stratified)
+    np.save("y_train_stratified.npy", y_train_stratified)
+    np.save("X_test_stratified.npy", X_test_stratified)
+    np.save("y_test_stratified.npy", y_test_stratified)
 
     # X_train, X_test, y_train, y_test = train_test_split(
     #     vectors, data["hyperclasses"], test_size=0.2, random_state=42, shuffle=True
@@ -166,30 +179,39 @@ def train_or_load_classification_model(model_file_path, new_doc2vec_model):
             ),
             keras.layers.Dropout(0.3),
             keras.layers.Dense(64, activation="relu"),
-            keras.layers.Dense(y_train_stratified.shape[1], activation="sigmoid"),
+            # keras.layers.Dense(y_train_stratified.shape[1], activation="sigmoid"),
+            keras.layers.Dense(y_train_stratified.shape[1]),
+            keras.layers.Activation(keras.activations.softmax),
         ]
     )
 
     METRICS = [
         # keras.metrics.BinaryCrossentropy(name="bce"),  # same as model's loss
         # keras.metrics.MeanSquaredError(name="Brier score"),
-        keras.metrics.TruePositives(name="tp"),
-        keras.metrics.FalsePositives(name="fp"),
-        keras.metrics.TrueNegatives(name="tn"),
-        keras.metrics.FalseNegatives(name="fn"),
-        keras.metrics.BinaryAccuracy(name="accuracy"),
+        # keras.metrics.TruePositives(name="tp"),
+        # keras.metrics.FalsePositives(name="fp"),
+        # keras.metrics.TrueNegatives(name="tn"),
+        # keras.metrics.FalseNegatives(name="fn"),
+        # keras.metrics.BinaryAccuracy(name="accuracy"),
+        # keras.metrics.Precision(name="precision"),
+        # keras.metrics.Recall(name="recall"),
+        # keras.metrics.AUC(name="auc"),
+        # keras.metrics.AUC(name="prc", curve="PR"),  # precision-recall curve
         keras.metrics.Precision(name="precision"),
         keras.metrics.Recall(name="recall"),
-        keras.metrics.AUC(name="auc"),
-        keras.metrics.AUC(name="prc", curve="PR"),  # precision-recall curve
+        keras.metrics.F1Score(average="micro"),
+        keras.metrics.F1Score(average="macro"),
+        keras.metrics.AUC(name="auc", multi_label=True, num_labels=8),
+        keras.metrics.AUC(name="prc", curve="PR", multi_label=True, num_labels=8),
+        keras.metrics.Accuracy(name="accuracy"),
     ]
 
     # Compile the model
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=1e-3),
-        # loss=keras.losses.BinaryCrossentropy(),
+        loss=keras.losses.BinaryCrossentropy(from_logits=True),
         # loss=focal_loss(alpha=0.25, gamma=2.0),
-        loss=BinaryFocalLoss(gamma=2),
+        # loss=BinaryFocalLoss(gamma=2),
         metrics=METRICS,
     )
 
@@ -197,7 +219,7 @@ def train_or_load_classification_model(model_file_path, new_doc2vec_model):
     history = model.fit(
         X_train_stratified,
         y_train_stratified,
-        epochs=2,
+        epochs=5,
         batch_size=32,
         validation_data=(X_test_stratified, y_test_stratified),
         class_weight=class_weights,
@@ -205,8 +227,15 @@ def train_or_load_classification_model(model_file_path, new_doc2vec_model):
 
     model.save("model.keras")
 
+    logits = tf.keras.Sequential(model.layers[:4]).predict(X_test_stratified)
+    temprature = 10
+    new_logits = logits / temprature
+    y_pred_bin = np.array([tf.nn.softmax(l) for l in new_logits])
+    pprint(y_pred_bin)
+
     # Evaluate the model on the test set
-    y_pred_bin = (model.predict(X_test_stratified) > 0.5).astype(int)
+    # y_pred_bin = (model.predict(X_test_stratified) > 0.15).astype(int)
+    y_pred_bin = (y_pred_bin > 0.15).astype(int)
 
     print(
         "Classification Report:\n",
@@ -223,6 +252,8 @@ def train_or_load_classification_model(model_file_path, new_doc2vec_model):
 
     # 3. Plot the training history
     plot_history(history)
+    plot.plot_confusion_matrix(y_test_stratified, y_pred_bin)
+    plot.plot_micro_average_precision(y_test_stratified, y_pred_bin)
 
     return model, history
 
