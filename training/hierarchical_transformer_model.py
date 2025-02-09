@@ -4,15 +4,25 @@ from tqdm import tqdm
 import logging
 import os
 
-
+import numpy as np
 from typing import Iterable
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import (
+    precision_recall_curve,
+    average_precision_score,
+    classification_report,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+)
 
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
@@ -26,6 +36,13 @@ from .paper_dataset import PaperDataset
 from .hierarchical_paper_dataset import (
     HierarchicalPaperDataset,
 )
+from torchmetrics.classification import (
+    MultilabelPrecision,
+    MultilabelRecall,
+    MultilabelF1Score,
+    MultilabelPrecisionRecallCurve,
+)
+import matplotlib.pyplot as plt
 
 import defaults
 import random
@@ -87,6 +104,7 @@ class HierarchicalClassifier:
         self.epochs = epochs
         self.lr = lr
         self.batch_size = batch_size
+        self.hyperclass_names = hyperclass_list
         self.n_hyperclasses = len(hyperclass_list)
         self.n_labels = len(label_list)
         self.hyperclass_to_label_map = hyperclass_to_label_map
@@ -127,6 +145,31 @@ class HierarchicalClassifier:
             }
         )
 
+        # Calculate metrics
+        self.precision_macro = MultilabelPrecision(
+            num_labels=self.n_hyperclasses, average="macro"
+        ).to(self.device)
+        self.recall_macro = MultilabelRecall(
+            num_labels=self.n_hyperclasses, average="macro"
+        ).to(self.device)
+        self.f1_macro = MultilabelF1Score(
+            num_labels=self.n_hyperclasses, average="macro"
+        ).to(self.device)
+
+        self.precision_micro = MultilabelPrecision(
+            num_labels=self.n_hyperclasses, average="micro"
+        ).to(self.device)
+        self.recall_micro = MultilabelRecall(
+            num_labels=self.n_hyperclasses, average="micro"
+        ).to(self.device)
+        self.f1_micro = MultilabelF1Score(
+            num_labels=self.n_hyperclasses, average="micro"
+        ).to(self.device)
+
+        self.prc_metric = MultilabelPrecisionRecallCurve(
+            num_labels=self.n_hyperclasses
+        ).to(self.device)
+
         # Optimizers
         self.hyperclass_optimizer = torch.optim.Adam(
             self.hyperclass_head.parameters(),
@@ -140,9 +183,9 @@ class HierarchicalClassifier:
         # Loss functions
         self.hyperclass_criterion = nn.BCEWithLogitsLoss()
         # self.hyperclass_criterion = FocalLoss().to(self.device)
-        self.label_criterion = (
-            nn.BCEWithLogitsLoss()
-        ).to(self.device)  # FocalBCELoss(self.n_labels).to(self.device)
+        self.label_criterion = (nn.BCEWithLogitsLoss()).to(
+            self.device
+        )  # FocalBCELoss(self.n_labels).to(self.device)
         # self.label_criterion = FocalLoss().to(self.device)
 
         self.threshold = threshold
@@ -175,6 +218,7 @@ class HierarchicalClassifier:
 
                 # Hyperclass prediction
                 hyperclass_logits = self.hyperclass_head(embeddings)
+                hyperclass_logits /= 10
                 loss = self.hyperclass_criterion(hyperclass_logits, hyperclass_labels)
 
                 # Backward pass
@@ -186,13 +230,11 @@ class HierarchicalClassifier:
                 total_train_samples += hyperclass_labels.size(0)
 
                 # Compute accuracy
+
                 pred_hyperclass = torch.sigmoid(hyperclass_logits) > self.threshold
 
                 correct_train += (
-                    (pred_hyperclass == hyperclass_labels)
-                    .float()
-                    .sum()
-                    .item()
+                    (pred_hyperclass == hyperclass_labels).float().sum().item()
                 )
 
             avg_train_loss = total_train_loss / len(train_loader)
@@ -204,7 +246,7 @@ class HierarchicalClassifier:
                 for batch in val_loader:
                     # Get embeddings
                     embeddings = batch["embedding"].float().to(self.device)
-                    
+
                     hyperclass_labels = (
                         batch["hyperclass_labels"].float().to(self.device)
                     )
@@ -226,20 +268,56 @@ class HierarchicalClassifier:
                     pred_hyperclass = torch.sigmoid(hyperclass_logits) > self.threshold
 
                     correct_val += (
-                        (pred_hyperclass == hyperclass_labels)
-                        .float()
-                        .sum()
-                        .item()
+                        (pred_hyperclass == hyperclass_labels).float().sum().item()
                     )
 
             avg_val_loss = total_val_loss / len(val_loader)
             val_accuracy = correct_val / total_val_samples
+            precision_macro_value = self.precision_macro(
+                pred_hyperclass, hyperclass_labels
+            )
+            recall_macro_value = self.recall_macro(pred_hyperclass, hyperclass_labels)
+            f1_macro_value = self.f1_macro(pred_hyperclass, hyperclass_labels)
 
+            precision_micro_value = self.precision_micro(
+                pred_hyperclass, hyperclass_labels
+            )
+            recall_micro_value = self.recall_micro(pred_hyperclass, hyperclass_labels)
+            f1_micro_value = self.f1_micro(pred_hyperclass, hyperclass_labels)
             progress_bar.write(
                 f"epoch: {epoch+1}/{self.epochs} train loss {avg_train_loss:.4e}, train accuracy: {train_accuracy:.4e} "
                 + f"val loss {avg_val_loss:.4e}, val accuracy: {val_accuracy:.4e}"
+                + f""" 
+Micro=> precision: {precision_micro_value:.2f}, recall: {recall_micro_value:.2f}, f1: {f1_micro_value:.2f}
+Macro=> precision: {precision_macro_value:.2f}, recall: {recall_macro_value:.2f}, f1: {f1_macro_value:.2f} """
             )
+
             progress_bar.update(1)
+        # # after the last epoch
+        # hyperclass_logits = hyperclass_logits.to("cpu")
+        # hyperclass_labels = hyperclass_labels.to("cpu")
+        # precisions, recalls, thresholds = self.prc_metric(
+        #     hyperclass_logits, hyperclass_labels.to(torch.int)
+        # )
+
+        # fig, axes = plt.subplots(
+        #     2, 4, figsize=(20, 10)
+        # )  # 2 rows, 4 columns for 8 classes
+
+        # for i in range(self.n_hyperclasses):
+        #     row, col = divmod(i, 4)  # Determine subplot position
+        #     ax = axes[row, col]
+        #     ax.plot(recalls[i], precisions[i], label=f"Class {i}")
+        #     ax.set_xlabel("Recall")
+        #     ax.set_ylabel("Precision")
+        #     ax.set_title(f"PRC for Class {i}")
+        #     ax.legend()
+        #     ax.grid()
+
+        # # Adjust layout and save the figure
+        # plt.tight_layout()
+        # plt.savefig("plots/prc_curves.png")  # Save as a single file
+        # plt.show()
 
     def _train_label_classifiers(
         self,
@@ -408,13 +486,17 @@ class HierarchicalClassifier:
     def train(self):
         """Main training loop"""
         # Split dataset
-        train_size = int(0.8 * len(self._dataset))
-        test_size = len(self._dataset) - train_size
-        train_dataset, val_dataset = random_split(
-            self._dataset, [train_size, test_size]
+        np.random.seed(42)
+        WANTED_VALUES = 500_000
+        random_indices = np.random.choice(
+            len(self._dataset), WANTED_VALUES, replace=False
         )
-        
         self.dataset._load_embeddings()  # EXTREMELY IMPORTANT STEP IN PIPELINE!
+        subset = Subset(self._dataset, random_indices)
+        train_size = int(0.8 * len(subset))
+        test_size = len(subset) - train_size
+        train_dataset, val_dataset = random_split(subset, [train_size, test_size])
+
         train_loader = DataLoader(
             # train_subset,  # train_dataset
             train_dataset,
@@ -431,7 +513,7 @@ class HierarchicalClassifier:
             num_workers=4,
             # pin_memory=True,
         )
-
+        self.val_loader = val_loader
         # Train hyperclass classifier first
         self._train_hyperclass_classifier(
             train_loader,
@@ -444,12 +526,10 @@ class HierarchicalClassifier:
         #     val_loader,
         # )
 
-    def predict(self, text):
+    def _predict(self, text):
         """Predict both hyperclass and labels for a given text"""
         self.trunk.eval()
         self.hyperclass_head.eval()
-        for head in self.label_heads.values():
-            head.eval()
 
         tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
 
@@ -490,6 +570,230 @@ class HierarchicalClassifier:
                     ]
 
         return predictions
+
+    def predict(self, text=None):
+        """Evaluate the entire validation dataset, compute metrics, and plot PRC curves"""
+        self.trunk.eval()
+        self.hyperclass_head.eval()
+
+        # Initialize metrics
+        total_val_loss = 0
+        correct_val = 0
+        total_val_samples = 0
+
+        # PRC metric
+        self.prc_metric = MultilabelPrecisionRecallCurve(num_labels=self.n_hyperclasses)
+
+        # Metric containers
+        all_hyperclass_logits = []
+        all_hyperclass_labels = []
+
+        with torch.no_grad():
+            for batch in self.val_loader:
+                # Get embeddings
+                embeddings = batch["embedding"].float().to(self.device)
+                hyperclass_labels = batch["hyperclass_labels"].float().to(self.device)
+
+                # Predict hyperclasses
+                hyperclass_logits = self.hyperclass_head(embeddings)
+                hyperclass_logits /= 10
+                loss = self.hyperclass_criterion(hyperclass_logits, hyperclass_labels)
+
+                total_val_loss += loss.item()
+                total_val_samples += hyperclass_labels.size(0)
+
+                # Store logits and labels for metrics
+                all_hyperclass_logits.append(hyperclass_logits)
+                all_hyperclass_labels.append(hyperclass_labels)
+
+                # Accuracy
+                pred_hyperclass = (
+                    torch.sigmoid(hyperclass_logits) > self.threshold
+                ).float()
+                correct_val += (pred_hyperclass == hyperclass_labels).sum().item()
+
+        avg_val_loss = total_val_loss / len(self.val_loader)
+        val_accuracy = correct_val / total_val_samples
+
+        # Concatenate all logits and labels for metric calculations
+        all_hyperclass_logits = torch.cat(all_hyperclass_logits, dim=0)
+        all_hyperclass_labels = torch.cat(all_hyperclass_labels, dim=0)
+
+        # Compute metrics
+        precision_macro_value = self.precision_macro(
+            (all_hyperclass_logits > self.threshold).float(), all_hyperclass_labels
+        )
+        recall_macro_value = self.recall_macro(
+            (all_hyperclass_logits > self.threshold).float(), all_hyperclass_labels
+        )
+        f1_macro_value = self.f1_macro(
+            (all_hyperclass_logits > self.threshold).float(), all_hyperclass_labels
+        )
+        precision_micro_value = self.precision_micro(
+            (all_hyperclass_logits > self.threshold).float(), all_hyperclass_labels
+        )
+        recall_micro_value = self.recall_micro(
+            (all_hyperclass_logits > self.threshold).float(), all_hyperclass_labels
+        )
+        f1_micro_value = self.f1_micro(
+            (all_hyperclass_logits > self.threshold).float(), all_hyperclass_labels
+        )
+
+        # Move data to appropriate device
+        all_hyperclass_logits = all_hyperclass_logits.cpu()
+        all_hyperclass_labels = all_hyperclass_labels.cpu()
+
+        # Get predictions and labels
+        true_labels = all_hyperclass_labels.cpu().numpy()
+        final_preds = torch.sigmoid(all_hyperclass_logits).cpu().numpy()
+        class_names = self.hyperclass_names
+        n_classes = len(class_names)  # Number of classes
+        # Compute precision-recall and average precision for each class
+        precision_recall_curves = []
+        average_precisions = []
+        for i in range(n_classes):
+            precision, recall, _ = precision_recall_curve(true_labels[:, i], final_preds[:, i])
+            ap = average_precision_score(true_labels[:, i], final_preds[:, i])
+            precision_recall_curves.append((precision, recall))
+            average_precisions.append(ap)
+        # Compute micro-average precision-recall curve
+        true_labels_flat = true_labels.ravel()
+        predicted_probs_flat = final_preds.ravel()
+        micro_precision, micro_recall, _ = precision_recall_curve(true_labels_flat, predicted_probs_flat)
+        micro_average_precision = average_precision_score(true_labels_flat, predicted_probs_flat)
+
+        # Plot Precision-Recall Curves with Seaborn
+        plt.figure(figsize=(10, 8), dpi=600)
+        sns.set_theme(style="whitegrid")
+
+        # Plot micro-average curve
+        plt.plot(
+            micro_recall,
+            micro_precision,
+            label=f"Micro-average precision-recall (AP = {micro_average_precision:.2f})",
+            color="gold",
+        )
+
+        # Colors for classes
+        palette = sns.color_palette("tab10", n_classes)
+
+        # Plot each class curve
+        for i, (precision, recall) in enumerate(precision_recall_curves):
+            plt.plot(
+                recall,
+                precision,
+                label=f"{class_names[i]} (AP = {average_precisions[i]:.2f})",
+                color=palette[i],
+            )
+
+        # Customize the plot
+        plt.title("Precision-Recall Curve for Multi-Label Classification", fontsize=26)
+        plt.xlabel("Recall", fontsize=24)
+        plt.ylabel("Precision", fontsize=24)
+        plt.legend(loc="lower left", fontsize='medium', title="Legend")
+        plt.tight_layout()
+        # plt.savefig("plots/precision_recall_curves.png")  # Save the plot
+        plt.show()
+
+        # Print metrics
+        print(
+            f"Validation Loss: {avg_val_loss:.4f}, Accuracy: {val_accuracy:.4f}\n"
+            f"Macro => Precision: {precision_macro_value:.2f}, Recall: {recall_macro_value:.2f}, F1: {f1_macro_value:.2f}\n"
+            f"Micro => Precision: {precision_micro_value:.2f}, Recall: {recall_micro_value:.2f}, F1: {f1_micro_value:.2f}"
+        )
+        binary_preds = (final_preds >= self.threshold).astype(int)
+
+        # Generate the classification report
+        report = classification_report(
+            true_labels, binary_preds, target_names=class_names, zero_division=0
+        )
+        print("Classification report:\n", report)
+
+    def plot_confusion_matrix(self, ):
+        """Evaluate the entire validation dataset, compute metrics, and plot confusion matrices"""
+        self.trunk.eval()
+        self.hyperclass_head.eval()
+
+        # Initialize metrics
+        total_val_loss = 0
+        correct_val = 0
+        total_val_samples = 0
+
+        # Metric containers
+        all_hyperclass_logits = []
+        all_hyperclass_labels = []
+
+        with torch.no_grad():
+            for batch in self.val_loader:
+                # Get embeddings
+                embeddings = batch["embedding"].float().to(self.device)
+                hyperclass_labels = batch["hyperclass_labels"].float().to(self.device)
+
+                # Predict hyperclasses
+                hyperclass_logits = self.hyperclass_head(embeddings)
+                hyperclass_logits /= 10
+                loss = self.hyperclass_criterion(hyperclass_logits, hyperclass_labels)
+
+                total_val_loss += loss.item()
+                total_val_samples += hyperclass_labels.size(0)
+
+                # Store logits and labels for metrics
+                all_hyperclass_logits.append(hyperclass_logits)
+                all_hyperclass_labels.append(hyperclass_labels)
+
+                # Accuracy
+                pred_hyperclass = (
+                    torch.sigmoid(hyperclass_logits) > self.threshold
+                ).float()
+                correct_val += (pred_hyperclass == hyperclass_labels).sum().item()
+
+        # Concatenate all logits and labels for metric calculations
+        all_hyperclass_logits = torch.cat(all_hyperclass_logits, dim=0)
+        all_hyperclass_labels = torch.cat(all_hyperclass_labels, dim=0)
+
+        # # Move data to appropriate device
+        all_hyperclass_logits = all_hyperclass_logits.cpu()
+        all_hyperclass_labels = all_hyperclass_labels.cpu()
+
+        # Get predictions and labels
+        true_labels = all_hyperclass_labels.cpu().numpy()
+        final_preds = (
+            torch.sigmoid(all_hyperclass_logits).numpy() > self.threshold
+        ).astype(int)
+        class_names = self.hyperclass_names
+        class_names = [ # overwrite for simplicity in plot
+            "cs",
+            "econ",
+            "eess",
+            "math",
+            "physics",
+            "q-bio",
+            "q-fin",
+            "stat",
+        ]
+        n_classes = len(class_names)  # Number of classes
+
+        # Compute and plot confusion matrices
+        fig, axes = plt.subplots(2, 4, figsize=(15, 7), dpi=600)
+        axes = axes.ravel()
+
+        for i in range(n_classes):
+            cm = confusion_matrix(true_labels[:, i], final_preds[:, i])
+            disp = ConfusionMatrixDisplay(cm, display_labels=[0, 1])
+            disp.plot(ax=axes[i], values_format=".4g")
+            disp.ax_.set_title(f"Class: {class_names[i]}")
+
+            if i < 4:
+                disp.ax_.set_xlabel("")
+            if i % 4 != 0:
+                disp.ax_.set_ylabel("")
+
+            disp.im_.colorbar.remove()
+
+        plt.subplots_adjust(wspace=0.15, hspace=0.1)
+        fig.colorbar(disp.im_, ax=axes)
+        plt.savefig("plots/confusion_matrices.png")
+        plt.show()
 
     def extract_and_save_embeddings(
         self,

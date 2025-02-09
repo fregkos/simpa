@@ -12,7 +12,8 @@ from config import parse_arguments
 from data_loader import extract_fields, preprocess_and_save_dataset_as_csv, read_labels
 from defaults import CSV_PATH, categorized_labels
 from training import hierarchical_paper_dataset
-from training.doc2vec_model import train_or_load_classification_model
+# from training.doc2vec_model import train_or_load_classification_model
+
 from training.hierarchical_transformer_model import HierarchicalClassifier
 from training.preprocessing import create_necessary_folders
 
@@ -37,10 +38,12 @@ def main(args):
 
     # 1. Import Doc2Vec and create a new model if it doesn't exist
     if not use_transformer:  # this should probably be placed elsewhere for clarity
-        history, model = train_or_load_classification_model(
-            model_file_path, create_new_model
-        )
+        # history, model = train_or_load_classification_model(
+        #     model_file_path, create_new_model
+        # )
+        pass
     else:  # if use_transformer
+
         label_list = read_labels(defaults.LABELS_PATH)
 
         # checks are performed inside this following class
@@ -71,7 +74,8 @@ def main(args):
             hyperclass_to_label_map=categorized_labels,
             batch_size=352,  # it's just tensors after all
             lr=8e-2,
-            threshold=0.5,
+            threshold=0.15,
+            epochs=5,
         )
 
         # if the embeddings have already been extracted
@@ -83,6 +87,8 @@ def main(args):
             classifier.extract_and_save_embeddings()  # this should be done only once!
 
         classifier.train()
+        classifier.predict()
+        # classifier.plot_confusion_matrix()
 
 
 if __name__ == "__main__":

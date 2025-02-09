@@ -5,6 +5,7 @@ from tqdm import tqdm
 import os
 import defaults
 import torch.nn.functional as F
+from .preprocessing import fix_tag_hyperclass
 
 
 # Data cleanup for tags that are not available in the preZ categories
@@ -161,15 +162,20 @@ class HierarchicalPaperDataset(Dataset):
         self.embeddings = 0
     def _load_tokenized_data(self):
         """Load the processed dataset from disk"""
-        tokenized_data = torch.load(self.tokenized_data_path)
+        tokenized_data = torch.load(self.tokenized_data_path, weights_only=False)
         self.hyperclass_labels = tokenized_data["hyperclass_labels"]
         self.detailed_labels = tokenized_data["detailed_labels"]
         df = pd.read_csv(self.csv_path)
-        self.documents = df["doc"]
-        # this should be done from this file ? but we cant, as we have to load the trunk and the tokenizer ?
+        # df["hyperclasses"] = df["hyperclasses"].apply(lambda x: x.split(" "))
+        # df["hyperclasses"] = df["hyperclasses"].apply(
+        #     lambda x: [fix_tag_hyperclass(tag) for tag in x]
+        # )
+        # self.hyperclass_labels = df['hyperclasses']
+        self.documents = df["preprocessed_doc"]
 
+    # this should be done from this file ? but we cant, as we have to load the trunk and the tokenizer ?
     def _load_embeddings(self, embedding_path=defaults.HIERARCHICAL_EMBEDDINGS_DATA_PATH):
-        self.embeddings = torch.load(embedding_path)
+        self.embeddings = torch.load(embedding_path, weights_only=False)
 
 
     # hamming loss
