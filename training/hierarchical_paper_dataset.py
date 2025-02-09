@@ -6,6 +6,7 @@ import os
 from data_loader import read_labels
 import defaults
 import torch.nn.functional as F
+from .preprocessing import fix_tag_hyperclass
 from training import hierarchical_paper_dataset
 from training.hierarchical_transformer_model import HierarchicalClassifier
 from defaults import categorized_labels
@@ -79,8 +80,9 @@ def create_or_load_hierarchical_classifier(new_dataset, extract_embeddings):
         ],
         hyperclass_to_label_map=categorized_labels,
         batch_size=352,  # it's just tensors after all
-        lr=8e-2,
-        threshold=0.5,
+        lr=1e-3,
+        threshold=0.15,
+        epochs=5,
     )
 
     # if the embeddings have already been extracted
@@ -92,6 +94,8 @@ def create_or_load_hierarchical_classifier(new_dataset, extract_embeddings):
         classifier.extract_and_save_embeddings()  # this should be done only once!
 
     classifier.train()
+    classifier.predict()
+    classifier.plot_confusion_matrix()
 
 
 def prepare_and_tokenize_dataset(
@@ -210,26 +214,15 @@ class HierarchicalPaperDataset(Dataset):
 
     def _load_tokenized_data(self):
         """Load the processed dataset from disk"""
-        tokenized_data = torch.load(self.tokenized_data_path)
+        tokenized_data = torch.load(self.tokenized_data_path, weights_only=False)
         self.hyperclass_labels = tokenized_data["hyperclass_labels"]
         self.detailed_labels = tokenized_data["detailed_labels"]
         df = pd.read_csv(self.csv_path)
-        self.documents = df["doc"]
-        # this should be done from this file ? but we cant, as we have to load the trunk and the tokenizer ?
+        self.documents = df["preprocessed_doc"]
 
-    def _load_embeddings(
-        self, embedding_path=defaults.HIERARCHICAL_EMBEDDINGS_DATA_PATH
-    ):
-        self.embeddings = torch.load(embedding_path)
-
-    # hamming loss
-    # 0 1 1 0 target
-    # 0 0 0 0 predicted
-    # 0.5 loss
-
-    # 0 1 0 0 target
-    # 0 0 1 1 predicted
-    # 0.75 loss
+    # this should be done from this file ? but we cant, as we have to load the trunk and the tokenizer ?
+    def _load_embeddings(self, embedding_path=defaults.HIERARCHICAL_EMBEDDINGS_DATA_PATH):
+        self.embeddings = torch.load(embedding_path, weights_only=False)
 
     def __len__(self):
         return len(self.documents)
